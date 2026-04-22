@@ -244,6 +244,10 @@ export const MVA_LABELS = [
   {alt:"80",label:{deg:127,r:19}},{alt:"100",label:{deg:127,r:27.5}},{alt:"130",label:{deg:127,r:35}},{alt:"160",label:{deg:127,r:45}},
   {alt:"70",label:{deg:240,r:32.5}},{alt:"30",label:{deg:305,r:10}} 
 ];
+
+// 基準点がARP（Yonago）ではない、または複雑な多角形で構成されるMVAセクタ (RJOC基準は削除)
+export const MVA_COMPLEX_SECTORS = [];
+
 export const AIRWAYS = [
   { 
     id: 'G597', 
