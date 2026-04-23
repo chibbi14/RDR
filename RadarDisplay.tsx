@@ -5,12 +5,12 @@ import {
   ACA_POINTS_NM, MVA_MANUAL_ARCS, MVA_MANUAL_RADIALS, MVA_LABELS,
   PROCEDURES, RUNWAYS, AIRWAYS, DIRECT_ROUTES, RNAV_ROUTES
 } from './navigationData';
-import RadarDisplay3D from './RadarDisplay3D';
+import RadarDisplay3D from './RadarDisplay3D.tsx';
 import { MapPin, Radio, Triangle, Eye, EyeOff, Box, Move3d, Layers, Menu, X, ChevronLeft } from 'lucide-react';
 
 const RadarDisplay = () => {
   const [zoom, setZoom] = useState(1.0);
-  const [is3D, setIs3D] = useState(false);
+  const [is3D, setIs3D] = useState(true);
   const [verticalScale, setVerticalScale] = useState(1.0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
@@ -202,7 +202,7 @@ const RadarDisplay = () => {
       </aside>
 
       {/* Main Display Area */}
-      <div className="flex-1 relative flex flex-col h-full overflow-hidden">
+      <div className="flex-1 relative flex flex-col h-full min-h-0 overflow-hidden">
         {is3D ? (
           <RadarDisplay3D layers={layers} activeProcedures={activeProcedures} verticalScale={verticalScale} />
         ) : (

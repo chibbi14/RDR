@@ -254,6 +254,7 @@ export interface MVAComplexSector {
   alt: string;
   centerId: string;
   path: PathSegment[];
+  label?: { deg: number; r: number };
 }
 
 // 基準点がARP（Yonago）ではない、または複雑な多角形で構成されるMVAセクタ (RJOC基準は削除)
@@ -263,9 +264,12 @@ export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
     alt: "25",
     centerId: "RJOH",
     path: [
-      { type: 'arc', r: 10, start: 90, end: 180 },
-      { type: 'line', r: 15, deg: 180 },
-      { type: 'arc', r: 15, start: 180, end: 90 }
+      { type: 'arc', r: 3, start: 250, end: 335 },
+      { type: 'line', r: 10, deg: 335 },
+      { type: 'arc', r: 10, start: 335, end: 35 },
+      { type: 'line', r: 15, deg: 35 },
+      { type: 'arc', r: 15, start: 35, end: 50 },
+      { type: 'line', r: 0, deg: 50 }
     ]
   },
   {
@@ -279,6 +283,285 @@ export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
       { type: 'line', r: 15, deg: 290 },
       { type: 'arc', r: 15, start: 290, end: 335 },
       { type: 'line', r: 3, deg: 335 }
+    ]
+  },
+  {
+    id: "CS-003",
+    alt: "15",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 3, start: 250, end: 125 },
+      { type: 'line', r: 7, deg: 125 },
+      { type: 'arc', r: 7, start: 125, end: 87 },
+      { type: 'line', r: 30, deg: 87 },
+      { type: 'arc', r: 30, start: 87, end: 50 }
+    ]
+  },
+  {
+    id: "CS-004",
+    alt: "20",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 30, start: 50, end: 87 },
+      { type: 'line', r: 40, deg: 87 },
+      { type: 'arc', r: 40, start: 87, end: 50 }
+    ]
+  },
+  {
+    id: "CS-005",
+    alt: "40",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 40, start: 50, end: 100 },
+      { type: 'line', r: 50, deg: 100 },
+      { type: 'arc', r: 50, start: 100, end: 50 }
+    ]
+  },
+  {
+    id: "CS-006",
+    alt: "40",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 10, start: 335, end: 35 },
+      { type: 'line', r: 15, deg: 35 },
+      { type: 'arc', r: 15, start: 35, end: 335 }
+    ]
+  },
+  {
+    id: "CS-007",
+    alt: "50",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 15, start: 335, end: 35 },
+      { type: 'line', r: 25, deg: 35 },
+      { type: 'arc', r: 25, start: 35, end: 335 }
+    ]
+  },
+  {
+    id: "CS-008",
+    alt: "90",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 25, start: 335, end: 20 },
+      { type: 'line', r: 35, deg: 20 },
+      { type: 'arc', r: 35, start: 20, end: 360 },
+      { type: 'line', r: 40, deg: 360 },
+      { type: 'arc', r: 40, start: 360, end: 335 }
+    ]
+  },
+  {
+    id: "CS-009",
+    alt: "60",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 25, start: 20, end: 35 },
+      { type: 'line', r: 35, deg: 35 },
+      { type: 'arc', r: 35, start: 35, end: 20 }
+    ]
+  },
+  {
+    id: "CS-010",
+    alt: "30",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 15, start: 35, end: 50 },
+      { type: 'line', r: 25, deg: 50 },
+      { type: 'arc', r: 25, start: 50, end: 35 }
+    ]
+  },
+  {
+    id: "CS-011",
+    alt: "40",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 25, start: 35, end: 50 },
+      { type: 'line', r: 40, deg: 50 },
+      { type: 'arc', r: 40, start: 50, end: 35 }
+    ]
+  },
+  {
+    id: "CS-012",
+    alt: "50",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 40, start: 35, end: 50 },
+      { type: 'line', r: 50, deg: 50 },
+      { type: 'arc', r: 50, start: 50, end: 35 }
+    ]
+  },
+  {
+    id: "CS-013",
+    alt: "30",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 7, start: 87, end: 100 },
+      { type: 'line', r: 9, deg: 100 },
+      { type: 'arc', r: 9, start: 100, end: 87 }
+    ]
+  },
+  {
+    id: "CS-014",
+    alt: "35",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 9, start: 87, end: 100 },
+      { type: 'line', r: 40, deg: 100 },
+      { type: 'arc', r: 40, start: 100, end: 87 }
+    ]
+  },
+  {
+    id: "CS-015",
+    alt: "55",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 15, start: 100, end: 110 },
+      { type: 'line', r: 40, deg: 110 },
+      { type: 'arc', r: 40, start: 110, end: 100 }
+    ]
+  },
+  {
+    id: "CS-016",
+    alt: "70",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 40, start: 100, end: 110 },
+      { type: 'line', r: 50, deg: 110 },
+      { type: 'arc', r: 50, start: 110, end: 100 }
+    ]
+  },
+  {
+    id: "CS-017",
+    alt: "26",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 3, start: 125, end: 268 },
+      { type: 'line', r: 18, deg: 268 },
+      { type: 'arc', r: 18, start: 268, end:242 },
+      { type: 'line', r: 9, deg: 242 },
+      { type: 'arc', r: 9, start: 242, end: 125 }
+    ]
+  },
+  {
+    id: "CS-018",
+    alt: "40",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 9, start: 100, end: 210 },
+      { type: 'line', r: 13, deg: 210 },
+      { type: 'arc', r: 13, start: 210, end: 225 },
+      { type: 'line', r: 15, deg: 225 },
+      { type: 'arc', r: 15, start: 225, end: 235 },
+      { type: 'line', r: 18, deg: 235},
+      { type: 'arc', r: 18, start: 235, end: 290 },
+      { type: 'line', r: 15, deg: 290 },
+      { type: 'arc', r: 15, start: 290, end: 335 },
+      { type: 'line', r: 25, deg: 335 },
+      { type: 'arc', r: 25, start: 335, end: 225 },
+      { type: 'line', r: 18, deg: 225 },
+      { type: 'arc', r: 18, start: 225, end: 205 },
+      { type: 'line', r: 15, deg: 205 },
+      { type: 'arc', r: 15, start: 205, end: 145 },
+      { type: 'line', r: 13, deg: 145 },
+      { type: 'arc', r: 13, start: 145, end: 100 }
+    ],
+      label: { deg: 250, r: 22 }
+  },
+  {
+    id: "CS-019",
+    alt: "55",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 15, start: 145, end: 205 },
+      { type: 'line', r: 18, deg: 205 },
+      { type: 'arc', r: 18, start: 205, end: 225 },
+      { type: 'line', r: 25, deg: 225 },
+      { type: 'arc', r: 25, start: 225, end: 145 }
+    ]
+  },
+  {
+    id: "CS-020",
+    alt: "70",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 25, start: 145, end: 250 },
+      { type: 'line', r: 25.01, deg: 250 },
+      { type: 'arc', r: 25.01, start: 250, end: 335 },
+      { type: 'line', r: 40, deg: 335 },
+      { type: 'arc', r: 40, start: 335, end: 250 },
+      { type: 'line', r: 40.01, deg: 250 },
+      { type: 'arc', r: 40.01, start: 250, end: 145}
+    ],
+      label: { deg: 200, r: 30 }
+  },
+  {
+    id: "CS-021",
+    alt: "110",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 40, start: 145, end: 250 },
+      { type: 'line', r: 40.01, deg: 250 },
+      { type: 'arc', r: 40, start: 250, end: 360 },
+      { type: 'line', r: 35, deg: 360 },
+      { type: 'arc', r: 35, start: 360, end: 35 },
+      { type: 'line', r: 50, deg: 35 },
+      { type: 'arc', r: 50, start: 35, end: 250 },
+      { type: 'line', r: 50.01, deg: 250 },
+      { type: 'arc', r: 50, start: 250, end: 145 }
+    ],
+    label: { deg: 250, r: 45 }
+  },
+  {
+    id: "CS-022",
+    alt: "32",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 9, start: 210, end: 242 },
+      { type: 'line', r: 18, deg: 242 },
+      { type: 'arc', r: 18, start: 242, end: 235 },
+      { type: 'line', r: 15, deg: 235 },
+      { type: 'arc', r: 15, start: 235, end: 225 },
+      { type: 'line', r: 13, deg: 225 },
+      { type: 'arc', r: 13, start: 225, end: 210 }
+    ]
+  },
+    {
+    id: "CS-023",
+    alt: "80",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 15, start: 110, end: 145 },
+      { type: 'line', r: 25, deg: 145 },
+      { type: 'arc', r: 25, start: 145, end: 110 }
+    ]
+  },
+    {
+    id: "CS-024",
+    alt: "100",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 25, start: 110, end: 145},
+      { type: 'line', r: 30, deg: 145 },
+      { type: 'arc', r: 30, start: 145, end: 110 }
+    ]
+  },
+      {
+    id: "CS-025",
+    alt: "130",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 30, start: 110, end: 145 },
+      { type: 'line', r: 40, deg: 145 },
+      { type: 'arc', r: 40, start: 145, end: 110 }
+    ]
+  },
+        {
+    id: "CS-026",
+    alt: "160",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 40, start: 110, end: 145 },
+      { type: 'line', r: 50, deg:145},
+      { type: 'arc', r: 50, start: 145, end: 110 }
     ]
   }
 ];

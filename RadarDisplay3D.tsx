@@ -22,7 +22,7 @@ const CoordinateGrid = () => (
   <gridHelper args={[200, 20, 0x334155, 0x1e293b]} rotation={[0, 0, 0]} />
 );
 // 基準点オフセットと任意経路（Arc/Line）に対応したMVAセクタ
-const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, altScale, getPos3D }) => {
+const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale, getPos3D }) => {
   const normalizedAlt = getNormalizedAlt(alt);
   const yPos = normalizedAlt * altScale;
   const centerPos = getPos3D(centerId);
@@ -44,9 +44,10 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, altScale, getPo
         const sRad = (seg.start - 90) * Math.PI / 180;
         const eRad = (seg.end - 90) * Math.PI / 180;
         const delta = (seg.end - seg.start + 360) % 360;
-        // 航空のCW(0->90)は数学座標系ではCCW（反時計回り）
+        // 航空のHeading増加(CW)は、数学座標系では角度の増加(CCW)に対応します
+        // absarcの第6引数はanticlockwiseなので、Aviation CWならtrueを指定します
         const isAviationCW = delta < 180;
-        s.absarc(0, 0, seg.r, sRad, eRad, !isAviationCW);
+        s.absarc(0, 0, seg.r, sRad, eRad, isAviationCW);
       }
     });
     s.closePath();
@@ -60,13 +61,13 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, altScale, getPo
     // 開始点を追加
     const first = path[0];
     const startAngle = ((first.type === 'arc' ? first.start : first.deg) - 90) * Math.PI / 180;
-    pts.push([Math.cos(startAngle) * first.r * LON_CORRECTION, 0, Math.sin(startAngle) * first.r]);
+    pts.push([Math.cos(startAngle) * first.r, 0, Math.sin(startAngle) * first.r]); // Removed LON_CORRECTION
 
     path.forEach(seg => {
       if (seg.type === 'line') {
         const rad = (seg.deg - 90) * Math.PI / 180;
-        pts.push([Math.cos(rad) * seg.r * LON_CORRECTION, 0, Math.sin(rad) * seg.r]);
-      } else {
+         pts.push([Math.cos(rad) * seg.r, 0, Math.sin(rad) * seg.r]); // Removed LON_CORRECTION
+       } else {
         const steps = 32;
         let sR = (seg.start - 90) * Math.PI / 180;
         let eR = (seg.end - 90) * Math.PI / 180;
@@ -79,7 +80,7 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, altScale, getPo
 
         for(let i=1; i<=steps; i++) {
           const a = sR + (eR - sR) * (i/steps);
-          pts.push([Math.cos(a) * seg.r * LON_CORRECTION, 0, Math.sin(a) * seg.r]);
+          pts.push([Math.cos(a) * seg.r, 0, Math.sin(a) * seg.r]); // Removed LON_CORRECTION
         }
       }
     });
@@ -102,38 +103,60 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, altScale, getPo
     return geom;
   }, [borderPoints, yPos]);
 
-  // 高度ラベルをセクタの概ね中央（頂点の平均）に配置
+  // 高度ラベルの配置位置
   const labelPos = useMemo(() => {
-    if (borderPoints.length === 0) return [0, 0.5, 0];
-    // 重心を計算 (最後の重複点を除く)
-    const validPts = borderPoints.slice(0, -1);
-    const sumX = validPts.reduce((sum, p) => sum + p[0], 0);
-    const sumZ = validPts.reduce((sum, p) => sum + p[2], 0);
-    return [sumX / validPts.length, 0.5, sumZ / validPts.length];
-  }, [borderPoints]);
+    // 1. 手動設定(label)がある場合はそれを優先（deg, r を 3D 座標に変換）
+    if (label) {
+      const rad = (label.deg - 90) * Math.PI / 180;
+      return [Math.cos(rad) * label.r, 1.5, Math.sin(rad) * label.r];
+    }
 
-  const isCustom = id && !id.startsWith('STD-');
+    // 2. 面積重心の計算
+    if (borderPoints.length < 3) return [0, 1.5, 0];
+    
+    // 面積重心（Centroid of Area）を計算して凹型図形でも内部に収まるようにする
+    let area = 0;
+    let cx = 0;
+    let cz = 0;
+    
+    for (let i = 0; i < borderPoints.length - 1; i++) {
+      const p1 = borderPoints[i];
+      const p2 = borderPoints[i + 1];
+      const crossProduct = p1[0] * p2[2] - p2[0] * p1[2];
+      area += crossProduct;
+      cx += (p1[0] + p2[0]) * crossProduct;
+      cz += (p1[2] + p2[2]) * crossProduct;
+    }
+    
+    area /= 2;
+    if (Math.abs(area) < 0.01) {
+      // 図形が潰れている場合のフォールバック
+      return [borderPoints[0][0], 1.5, borderPoints[0][2]];
+    }
+    
+    return [cx / (6 * area), 1.5, cz / (6 * area)];
+  }, [borderPoints, label]);
 
   return (
-    <group position={[centerPos.x_3d, yPos, centerPos.z_3d]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[LON_CORRECTION, 1, 1]} renderOrder={2}>
+    <group position={[centerPos.x_3d, yPos, centerPos.z_3d]} scale={[LON_CORRECTION, 1, 1]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
         <shapeGeometry args={[shape, 32]} />
         <meshBasicMaterial 
-          color="#ffcc00" transparent opacity={0.7} side={THREE.DoubleSide} depthWrite={false} 
+          color="#6aff00" transparent opacity={0.0} side={THREE.DoubleSide} depthWrite={false} 
         />
       </mesh>
-      <Line points={borderPoints} color="#ff9d00" lineWidth={1} opacity={0.7} transparent />
+      <Line points={borderPoints} color="#4ff313" lineWidth={1} opacity={0.6} transparent />
       
       {/* 垂直な壁の追加 */}
       <mesh position={[0, -yPos, 0]} geometry={wallGeometry} renderOrder={2}>
-        <meshBasicMaterial color="#ffb300" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
+        <meshBasicMaterial color="#00bfff" transparent opacity={0.05} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
 
       <Text 
-        position={labelPos} fontSize={1.2} color="#ffcc00" rotation={[-Math.PI/2, 0, 0]} 
+        position={labelPos} fontSize={1.2} color="#00fff7" rotation={[-Math.PI/2, 0, 0]} 
         opacity={0.8} transparent textAlign="center"
       >
-        {isCustom ? `${id}\n${alt}` : alt}
+        {alt}
       </Text>
     </group>
   );
@@ -252,6 +275,7 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
       id: `STD-${s.alt}-${idx}`,
       alt: s.alt,
       centerId: 'ARP',
+      label: s.label, // 元のラベル位置を継承
       path: s.isFull 
         ? [
             { type: 'arc', r: s.r2, start: 0, end: 180 },
@@ -309,11 +333,6 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
         <OrbitControls makeDefault />
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} />
-
-        {/* 呼び出し確認用デバッグテキスト */}
-        <Text position={[0, 10, 0]} fontSize={20} color="red">
-          3D RENDERER ACTIVE
-        </Text>
         
         <CoordinateGrid />
 
