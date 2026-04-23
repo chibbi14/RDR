@@ -21,147 +21,47 @@ const getNormalizedAlt = (alt) => {
 const CoordinateGrid = () => (
   <gridHelper args={[200, 20, 0x334155, 0x1e293b]} rotation={[0, 0, 0]} />
 );
-
-// 扇形セクタを高度に合わせて立体的に描画するコンポーネント
-const MVACurvedSectorMesh = ({ r1, r2, start, end, isFull, alt, altScale, elevated = false }) => {
-  const normalizedAlt = getNormalizedAlt(alt);
-  const yPos = elevated ? normalizedAlt * altScale : 0;
-
-  const shape = useMemo(() => {
-    const s = new THREE.Shape();
-    const startRad = (start - 90) * Math.PI / 180;
-    let endRad = (end - 90) * Math.PI / 180;
-    
-    if (!isFull && endRad <= startRad) endRad += Math.PI * 2;
-    if (isFull) endRad = startRad + Math.PI * 2;
-
-    // 扇形の外周と内周を定義
-    s.absarc(0, 0, r2 * SCALE_3D, startRad, endRad, false);
-    if (r1 > 0) {
-      s.absarc(0, 0, r1 * SCALE_3D, endRad, startRad, true);
-    } else {
-      s.lineTo(0, 0);
-    }
-    return s;
-  }, [r1, r2, start, end, isFull]);
-
-  // 境界線のポイント計算
-  const borderPoints = useMemo(() => {
-    const pts = [];
-    const segs = 32;
-    const sRad = (start - 90) * Math.PI / 180;
-    let eRad = (end - 90) * Math.PI / 180;
-    if (!isFull && eRad <= sRad) eRad += Math.PI * 2;
-    if (isFull) eRad = sRad + Math.PI * 2;
-    for (let i = 0; i <= segs; i++) {
-      const a = sRad + (eRad - sRad) * (i / segs);
-      pts.push([Math.cos(a) * r2 * SCALE_3D * LON_CORRECTION, 0, Math.sin(a) * r2 * SCALE_3D]);
-    }
-    if (r1 > 0) {
-      for (let i = segs; i >= 0; i--) {
-        const a = sRad + (eRad - sRad) * (i / segs);
-        pts.push([Math.cos(a) * r1 * SCALE_3D * LON_CORRECTION, 0, Math.sin(a) * r1 * SCALE_3D]);
-      }
-    } else { pts.push([0, 0, 0]); }
-    pts.push(pts[0]);
-    return pts;
-  }, [r1, r2, start, end, isFull]);
-
-  // 垂直な壁のジオメトリ
-  const wallGeometry = useMemo(() => {
-    const vertices = [];
-    const indices = [];
-    for (let i = 0; i < borderPoints.length - 1; i++) {
-      const p1 = borderPoints[i]; const p2 = borderPoints[i+1];
-      const base = vertices.length / 3;
-      vertices.push(p1[0], 0, p1[2], p2[0], 0, p2[2], p1[0], yPos, p1[2], p2[0], yPos, p2[2]);
-      indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-    }
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geom.setIndex(indices);
-    return geom;
-  }, [borderPoints, yPos]);
-
-  // メッシュの中央に高度を表示するための座標計算
-  const labelPos = useMemo(() => {
-    const startRad = (start - 90) * Math.PI / 180;
-    let endRad = (end - 90) * Math.PI / 180;
-    if (!isFull && endRad <= startRad) endRad += Math.PI * 2;
-    if (isFull) endRad = startRad + Math.PI * 2;
-    
-    const midAngle = (startRad + endRad) / 2;
-    const midR = (r1 + r2) / 2;
-    
-    return [
-      midR * Math.cos(midAngle) * SCALE_3D * LON_CORRECTION,
-      0.15, // メッシュのすぐ上に配置
-      midR * Math.sin(midAngle) * SCALE_3D
-    ];
-  }, [r1, r2, start, end, isFull]);
-
-  return (
-    <group position={[0, yPos, 0]}>
-      <mesh 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        scale={[LON_CORRECTION, 1, 1]}
-        renderOrder={1}
-      >
-        <shapeGeometry args={[shape, 32]} />
-        {/* セクタの塗りつぶし (シアン) */}
-        <meshBasicMaterial color="#00ffff" transparent opacity={0.25} side={THREE.DoubleSide} depthWrite={false} />
-      </mesh>
-
-      <Line points={borderPoints} color="#00ffff" lineWidth={1} opacity={0.4} transparent />
-
-      {/* 垂直な壁の追加 */}
-      {elevated && (
-        <mesh position={[0, -yPos, 0]} geometry={wallGeometry} renderOrder={2}>
-          <meshBasicMaterial color="#00ffff" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
-        </mesh>
-      )}
-
-      <Text 
-        position={labelPos} 
-        fontSize={0.9} 
-        color="#00f2ff" 
-        opacity={elevated ? 1 : 0.3} 
-        transparent rotation={[-Math.PI / 2, 0, 0]}
-      >
-        {alt}
-      </Text>
-    </group>
-  );
-};
-
 // 基準点オフセットと任意経路（Arc/Line）に対応したMVAセクタ
-const MVAComplexSectorMesh = ({ alt, centerId, path, altScale, getPos3D }) => {
+const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, altScale, getPos3D }) => {
   const normalizedAlt = getNormalizedAlt(alt);
   const yPos = normalizedAlt * altScale;
   const centerPos = getPos3D(centerId);
 
   const shape = useMemo(() => {
     const s = new THREE.Shape();
-    s.moveTo(0, 0); // 中心から開始
-    path.forEach(seg => {
-      const rad = (seg.deg - 90) * Math.PI / 180;
+    if (path.length === 0) return s;
+
+    // パスの開始点へ移動
+    const first = path[0];
+    const startAngle = ((first.type === 'arc' ? first.start : first.deg) - 90) * Math.PI / 180;
+    s.moveTo(Math.cos(startAngle) * first.r, Math.sin(startAngle) * first.r);
+
+    path.forEach((seg) => {
       if (seg.type === 'line') {
+        const rad = (seg.deg - 90) * Math.PI / 180;
         s.lineTo(Math.cos(rad) * seg.r, Math.sin(rad) * seg.r);
       } else if (seg.type === 'arc') {
         const sRad = (seg.start - 90) * Math.PI / 180;
         const eRad = (seg.end - 90) * Math.PI / 180;
-        // 方位角の増減に合わせて回転方向を決定
         const delta = (seg.end - seg.start + 360) % 360;
+        // 航空のCW(0->90)は数学座標系ではCCW（反時計回り）
         const isAviationCW = delta < 180;
-        s.absarc(0, 0, seg.r, sRad, eRad, isAviationCW);
+        s.absarc(0, 0, seg.r, sRad, eRad, !isAviationCW);
       }
     });
+    s.closePath();
     return s;
   }, [path]);
 
   const borderPoints = useMemo(() => {
     const pts = [];
-    pts.push([0, 0, 0]); // 中心
+    if (path.length === 0) return pts;
+
+    // 開始点を追加
+    const first = path[0];
+    const startAngle = ((first.type === 'arc' ? first.start : first.deg) - 90) * Math.PI / 180;
+    pts.push([Math.cos(startAngle) * first.r * LON_CORRECTION, 0, Math.sin(startAngle) * first.r]);
+
     path.forEach(seg => {
       if (seg.type === 'line') {
         const rad = (seg.deg - 90) * Math.PI / 180;
@@ -172,8 +72,11 @@ const MVAComplexSectorMesh = ({ alt, centerId, path, altScale, getPos3D }) => {
         let eR = (seg.end - 90) * Math.PI / 180;
         const delta = (seg.end - seg.start + 360) % 360;
         const isAviationCW = delta < 180;
-        if (!isAviationCW && eR <= sR) eR += Math.PI * 2;
-        if (isAviationCW && sR <= eR) sR += Math.PI * 2;
+        
+        // 補間方向の調整: 航空CWなら数学CCW(eR > sR)へ
+        if (isAviationCW && eR <= sR) eR += Math.PI * 2;
+        if (!isAviationCW && sR <= eR) sR += Math.PI * 2;
+
         for(let i=1; i<=steps; i++) {
           const a = sR + (eR - sR) * (i/steps);
           pts.push([Math.cos(a) * seg.r * LON_CORRECTION, 0, Math.sin(a) * seg.r]);
@@ -191,7 +94,7 @@ const MVAComplexSectorMesh = ({ alt, centerId, path, altScale, getPos3D }) => {
       const p1 = borderPoints[i]; const p2 = borderPoints[i+1];
       const base = vertices.length / 3;
       vertices.push(p1[0], 0, p1[2], p2[0], 0, p2[2], p1[0], yPos, p1[2], p2[0], yPos, p2[2]);
-      indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
     }
     const geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -199,20 +102,39 @@ const MVAComplexSectorMesh = ({ alt, centerId, path, altScale, getPos3D }) => {
     return geom;
   }, [borderPoints, yPos]);
 
+  // 高度ラベルをセクタの概ね中央（頂点の平均）に配置
+  const labelPos = useMemo(() => {
+    if (borderPoints.length === 0) return [0, 0.5, 0];
+    // 重心を計算 (最後の重複点を除く)
+    const validPts = borderPoints.slice(0, -1);
+    const sumX = validPts.reduce((sum, p) => sum + p[0], 0);
+    const sumZ = validPts.reduce((sum, p) => sum + p[2], 0);
+    return [sumX / validPts.length, 0.5, sumZ / validPts.length];
+  }, [borderPoints]);
+
+  const isCustom = id && !id.startsWith('STD-');
+
   return (
     <group position={[centerPos.x_3d, yPos, centerPos.z_3d]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[LON_CORRECTION, 1, 1]} renderOrder={2}>
         <shapeGeometry args={[shape, 32]} />
-        <meshBasicMaterial color="#00ffff" transparent opacity={0.25} side={THREE.DoubleSide} depthWrite={false} />
+        <meshBasicMaterial 
+          color="#ffcc00" transparent opacity={0.7} side={THREE.DoubleSide} depthWrite={false} 
+        />
       </mesh>
-      <Line points={borderPoints} color="#00ffff" lineWidth={1} opacity={0.3} transparent />
+      <Line points={borderPoints} color="#ff9d00" lineWidth={1} opacity={0.7} transparent />
       
       {/* 垂直な壁の追加 */}
       <mesh position={[0, -yPos, 0]} geometry={wallGeometry} renderOrder={2}>
-        <meshBasicMaterial color="#00ffff" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
+        <meshBasicMaterial color="#ffb300" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
 
-      <Text position={[0, 0.5, 0]} fontSize={1.2} color="#00f2ff" rotation={[-Math.PI/2, 0, 0]} opacity={0.8} transparent>{alt}</Text>
+      <Text 
+        position={labelPos} fontSize={1.2} color="#ffcc00" rotation={[-Math.PI/2, 0, 0]} 
+        opacity={0.8} transparent textAlign="center"
+      >
+        {isCustom ? `${id}\n${alt}` : alt}
+      </Text>
     </group>
   );
 };
@@ -227,7 +149,7 @@ const MVAGrid3D = () => {
         const z1 = r.r1 * Math.sin((r.deg - 90) * Math.PI / 180) * SCALE_3D;
         const x2 = r.r2 * Math.cos((r.deg - 90) * Math.PI / 180) * SCALE_3D * LON_CORRECTION;
         const z2 = r.r2 * Math.sin((r.deg - 90) * Math.PI / 180) * SCALE_3D;
-        return <Line key={`rad-${i}`} points={[[x1, 0, z1], [x2, 0, z2]]} color="#00aeff" lineWidth={0.5} opacity={0.2} transparent />;
+        return <Line key={`rad-${i}`} points={[[x1, 0, z1], [x2, 0, z2]]} color="#00ff48" lineWidth={0.5} opacity={0.2} transparent />;
       })}
       
       {/* 円弧の描画 */}
@@ -248,7 +170,7 @@ const MVAGrid3D = () => {
             a.r * Math.sin(angle) * SCALE_3D
           ]);
         }
-        return <Line key={`arc-${i}`} points={pts} color="#00fff7" lineWidth={0.5} opacity={0.2} transparent />;
+        return <Line key={`arc-${i}`} points={pts} color="#00ff2f" lineWidth={0.5} opacity={0.2} transparent />;
       })}
     </group>
   );
@@ -315,12 +237,36 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
   const altScale = ALT_BASE_FACTOR * verticalScale;
 
   // MVAの境界線とラベルデータから、動的にセクタのジオメトリ範囲を計算
-  const mvaSectors = useMemo(() => {
+  const allMvaSectors = useMemo(() => {
     if (!layers.mva) return [];
-    // カスタムセクタ（MVA_COMPLEX_SECTORS）で定義した高度のラベルを自動生成から除外する
-    const complexAltitudes = MVA_COMPLEX_SECTORS.map(s => s.alt);
-    const filteredLabels = MVA_LABELS.filter(l => !complexAltitudes.includes(l.alt));
-    return computeMVASectors(MVA_RINGS, MVA_MANUAL_RADIALS, MVA_MANUAL_ARCS, filteredLabels);
+
+    // 1. 重複を避けるため、正規化された高度のリストを作成
+    const complexAltValues = MVA_COMPLEX_SECTORS.map(s => getNormalizedAlt(s.alt));
+    
+    // 正規化された数値でフィルタリングすることで、"25" と "2500" の混在などによる重複を防ぐ
+    const filteredLabels = MVA_LABELS.filter(l => !complexAltValues.includes(getNormalizedAlt(l.alt)));
+    
+    const standard = computeMVASectors(MVA_RINGS, MVA_MANUAL_RADIALS, MVA_MANUAL_ARCS, filteredLabels);
+
+    const convertedStandard: any[] = standard.map((s, idx) => ({
+      id: `STD-${s.alt}-${idx}`,
+      alt: s.alt,
+      centerId: 'ARP',
+      path: s.isFull 
+        ? [
+            { type: 'arc', r: s.r2, start: 0, end: 180 },
+            { type: 'arc', r: s.r2, start: 180, end: 360 }
+          ]
+        : [
+            { type: 'arc', r: s.r2, start: s.start, end: s.end },
+            s.r1 > 0 
+              ? { type: 'arc', r: s.r1, start: s.end, end: s.start }
+              : { type: 'line', r: 0, deg: s.end }
+          ]
+    }));
+
+    // 2. カスタムセクタ（複雑な形状）と統合
+    return [...convertedStandard, ...MVA_COMPLEX_SECTORS];
   }, [layers.mva]);
 
   const getPos3D = (tgt) => {
@@ -363,6 +309,11 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
         <OrbitControls makeDefault />
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} />
+
+        {/* 呼び出し確認用デバッグテキスト */}
+        <Text position={[0, 10, 0]} fontSize={20} color="red">
+          3D RENDERER ACTIVE
+        </Text>
         
         <CoordinateGrid />
 
@@ -370,10 +321,10 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
         {layers.mva && (
           <group>
             <MVAGrid3D />
-            {/* 3D Elevated Planes: 動的に計算されたセクタデータを使用 */}
-            {layers.mva3d && mvaSectors.map((s, i) => <MVACurvedSectorMesh key={`mva-3d-${i}`} {...s} altScale={altScale} elevated={true} />)}
-            {/* カスタム（複数中心・複雑形状）セクタの描画 */}
-            {layers.mva3d && MVA_COMPLEX_SECTORS.map((s, i) => <MVAComplexSectorMesh key={`mva-complex-${i}`} {...s} altScale={altScale} getPos3D={getPos3D} />)}
+            {/* 統一された MVAComplexSectorMesh を唯一のレンダラーとして使用 */}
+            {layers.mva3d && allMvaSectors.map((s) => (
+              <MVAComplexSectorMesh key={s.id} {...s} altScale={altScale} getPos3D={getPos3D} />
+            ))}
           </group>
         )}
 

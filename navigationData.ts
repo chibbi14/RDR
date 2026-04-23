@@ -245,8 +245,43 @@ export const MVA_LABELS = [
   {alt:"70",label:{deg:240,r:32.5}},{alt:"30",label:{deg:305,r:10}} 
 ];
 
+export type PathSegment = 
+  | { type: 'line'; r: number; deg: number }
+  | { type: 'arc'; r: number; start: number; end: number };
+
+export interface MVAComplexSector {
+  id: string;
+  alt: string;
+  centerId: string;
+  path: PathSegment[];
+}
+
 // 基準点がARP（Yonago）ではない、または複雑な多角形で構成されるMVAセクタ (RJOC基準は削除)
-export const MVA_COMPLEX_SECTORS = [];
+export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
+  {
+    id: "CS-001",
+    alt: "25",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 10, start: 90, end: 180 },
+      { type: 'line', r: 15, deg: 180 },
+      { type: 'arc', r: 15, start: 180, end: 90 }
+    ]
+  },
+  {
+    id: "CS-002",
+    alt: "30",
+    centerId: "RJOH",
+    path: [
+      { type: 'arc', r: 3, start: 335, end: 268 },
+      { type: 'line', r: 18, deg: 268 },
+      { type: 'arc', r: 18, start: 268, end: 290 },
+      { type: 'line', r: 15, deg: 290 },
+      { type: 'arc', r: 15, start: 290, end: 335 },
+      { type: 'line', r: 3, deg: 335 }
+    ]
+  }
+];
 
 export const AIRWAYS = [
   { 

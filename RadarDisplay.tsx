@@ -24,7 +24,7 @@ const RadarDisplay = () => {
     airways: true,
     direct: true,
     rnav: true,
-    mva3d: false
+    mva3d: true
   });
   const [activeProcedures, setActiveProcedures] = useState({
     'INABA_25': true,
