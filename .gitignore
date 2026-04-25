@@ -1,5 +1,9 @@
 # Dependencies
 node_modules
+backup
+backup2
+fltinfo
+
 
 # Build output
 dist

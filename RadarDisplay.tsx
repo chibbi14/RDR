@@ -21,14 +21,17 @@ const RadarDisplay = () => {
     fixes: true, 
     vor: true, 
     runways: true,
-    airways: true,
-    direct: true,
-    rnav: true,
+    airways: false,
+    direct: false,
+    rnav: false,
     mva3d: true
   });
   const [activeProcedures, setActiveProcedures] = useState({
     'INABA_25': true,
-    'DOZEN_25_OC': true
+    'DOZEN_25_OC': true,
+    'USAGI DEP': true,
+    'ILS Z': true,
+    'RNP Y': true
   });
   const center = { x: 400, y: 400 };
 

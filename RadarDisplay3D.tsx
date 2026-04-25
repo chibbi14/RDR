@@ -27,33 +27,6 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale
   const yPos = normalizedAlt * altScale;
   const centerPos = getPos3D(centerId);
 
-  const shape = useMemo(() => {
-    const s = new THREE.Shape();
-    if (path.length === 0) return s;
-
-    // パスの開始点へ移動
-    const first = path[0];
-    const startAngle = ((first.type === 'arc' ? first.start : first.deg) - 90) * Math.PI / 180;
-    s.moveTo(Math.cos(startAngle) * first.r, Math.sin(startAngle) * first.r);
-
-    path.forEach((seg) => {
-      if (seg.type === 'line') {
-        const rad = (seg.deg - 90) * Math.PI / 180;
-        s.lineTo(Math.cos(rad) * seg.r, Math.sin(rad) * seg.r);
-      } else if (seg.type === 'arc') {
-        const sRad = (seg.start - 90) * Math.PI / 180;
-        const eRad = (seg.end - 90) * Math.PI / 180;
-        const delta = (seg.end - seg.start + 360) % 360;
-        // 航空のHeading増加(CW)は、数学座標系では角度の増加(CCW)に対応します
-        // absarcの第6引数はanticlockwiseなので、Aviation CWならtrueを指定します
-        const isAviationCW = delta < 180;
-        s.absarc(0, 0, seg.r, sRad, eRad, isAviationCW);
-      }
-    });
-    s.closePath();
-    return s;
-  }, [path]);
-
   const borderPoints = useMemo(() => {
     const pts = [];
     if (path.length === 0) return pts;
@@ -87,6 +60,22 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale
     pts.push(pts[0]);
     return pts;
   }, [path]);
+
+  // borderPointsのロジックを流用して、メッシュの表面（Shape）を生成する
+  const shape = useMemo(() => {
+    const s = new THREE.Shape();
+    if (borderPoints.length < 3) return s;
+
+    // 垂直な壁や境界線に使用しているポイントをそのまま順に繋ぐ
+    // これにより、境界線とメッシュが1ピクセルのズレもなく完全に一致する
+    // rotation=[-Math.PI/2, 0, 0] による North-South 反転を補正するため Z を反転
+    s.moveTo(borderPoints[0][0], -borderPoints[0][2]);
+    for (let i = 1; i < borderPoints.length; i++) {
+      s.lineTo(borderPoints[i][0], -borderPoints[i][2]);
+    }
+    s.closePath();
+    return s;
+  }, [borderPoints]);
 
   const wallGeometry = useMemo(() => {
     const vertices = [];
@@ -142,10 +131,10 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale
       <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
         <shapeGeometry args={[shape, 32]} />
         <meshBasicMaterial 
-          color="#6aff00" transparent opacity={0.0} side={THREE.DoubleSide} depthWrite={false} 
+          color="#00d5ff" transparent opacity={0.1} side={THREE.DoubleSide} depthWrite={false} 
         />
       </mesh>
-      <Line points={borderPoints} color="#4ff313" lineWidth={1} opacity={0.6} transparent />
+      <Line points={borderPoints} color="#13f3d9" lineWidth={1} opacity={0.6} transparent />
       
       {/* 垂直な壁の追加 */}
       <mesh position={[0, -yPos, 0]} geometry={wallGeometry} renderOrder={2}>
@@ -218,6 +207,258 @@ const MapPoint = ({ lat, lon, alt = 0, color, label, altScale }) => {
       {alt > 0 && (
         <Line points={[[0, 0, 0], [0, -alt * altScale, 0]]} color="#044eb7" lineWidth={0.5} dashed />
       )}
+    </group>
+  );
+};
+
+/**
+ * プロシージャーを1NM刻みのポイントに分割し、高度制限とマーカーを計算する
+ */
+const useProcedureNMPoints = (proc, getPos3D) => {
+  return useMemo(() => {
+    const points = [];
+    const markers = [];
+    let totalDist = 0;
+    let lastNMDist = 0;
+
+    proc.routes.forEach((r) => {
+      const s = getPos3D(r.from);
+      const e = getPos3D(r.to);
+      
+      if (r.type === 'arc' && r.center) {
+        const c = getPos3D(r.center);
+        const dxS = s.x_3d - c.x_3d;
+        const dzS = s.z_3d - c.z_3d;
+        const dxE = e.x_3d - c.x_3d;
+        const dzE = e.z_3d - c.z_3d;
+        const aStart = Math.atan2(dzS, dxS / LON_CORRECTION);
+        let aEnd = Math.atan2(dzE, dxE / LON_CORRECTION);
+        
+        // 始点と終点の中心からの実距離を計算（データ上の半径との誤差を吸収するため）
+        const distS = Math.sqrt((dxS / LON_CORRECTION) ** 2 + dzS ** 2);
+        const distE = Math.sqrt((dxE / LON_CORRECTION) ** 2 + dzE ** 2);
+
+        const isMapCW = r.sweep === 1;
+        let diff = aEnd - aStart;
+
+        // 角度差を [-PI, PI] の範囲に正規化
+        diff = ((diff + Math.PI) % (Math.PI * 2)) - Math.PI;
+        if (diff <= -Math.PI) diff += Math.PI * 2;
+
+        // 指定された旋回方向（Map CW = 角度増加）に強制する
+        if (isMapCW && diff < 0) diff += Math.PI * 2;
+        if (!isMapCW && diff > 0) diff -= Math.PI * 2;
+
+        aEnd = aStart + diff;
+
+        // 平均半径でNM距離を算出
+        const avgRadius = (distS + distE) / 2 / SCALE_3D;
+        const arcNM = Math.abs(diff) * avgRadius;
+        const steps = Math.max(1, Math.ceil(arcNM * 10)); // 0.1NM単位でサンプリング
+        
+        for (let i = 0; i <= steps; i++) {
+          const ratio = i / steps;
+          const angle = aStart + (aEnd - aStart) * ratio;
+          const currentDist = (distS + (distE - distS) * ratio); // 半径を始点から終点へ補間
+          const distOnSeg = ratio * arcNM;
+          const currentTotal = totalDist + distOnSeg;
+
+          const pos = {
+            x: c.x_3d + Math.cos(angle) * currentDist * LON_CORRECTION,
+            z: c.z_3d + Math.sin(angle) * currentDist,
+            nm: currentTotal
+          };
+          points.push(pos);
+
+          if (currentTotal >= lastNMDist + 1) {
+            const nm = Math.floor(currentTotal);
+            markers.push({ ...pos, label: nm.toString() });
+            lastNMDist = nm;
+          }
+        }
+        totalDist += arcNM;
+      } else {
+        const dx = e.x_3d - s.x_3d;
+        const dz = e.z_3d - s.z_3d;
+        const segDist = Math.sqrt((dx / LON_CORRECTION) ** 2 + dz ** 2) / SCALE_3D;
+        const steps = Math.max(1, Math.ceil(segDist * 10));
+
+        for (let i = 0; i <= steps; i++) {
+          const ratio = i / steps;
+          const currentTotal = totalDist + ratio * segDist;
+          const pos = {
+            x: s.x_3d + dx * ratio,
+            z: s.z_3d + dz * ratio,
+            nm: currentTotal
+          };
+          points.push(pos);
+
+          if (currentTotal >= lastNMDist + 1) {
+            const nm = Math.floor(currentTotal);
+            markers.push({ ...pos, label: nm.toString() });
+            lastNMDist = nm;
+          }
+        }
+        totalDist += segDist;
+      }
+    });
+
+    return { points, markers };
+  }, [proc, getPos3D]);
+};
+
+const Procedure3D = ({ id, proc, getPos, altScale }) => {
+  const COLORS = {
+    RJOH_SID: '#22d3ee',
+    RJOH_ARR: '#f472b6',
+    RJOC_SID: '#34d399',
+    RJOC_ARR: '#c084fc',
+  };
+
+  const color = proc.air === 'RJOC' 
+    ? (proc.type === 'SID' ? COLORS.RJOC_SID : COLORS.RJOC_ARR) 
+    : (proc.type === 'SID' ? COLORS.RJOH_SID : COLORS.RJOH_ARR);
+
+  const { points, markers } = useProcedureNMPoints(proc, getPos);
+
+  // 設定された高度ポイント間を線形補間する関数
+  const getInterpolatedAlt = useMemo(() => (nm: number) => {
+    if (!proc.nmAltitudes) return 0;
+    const keys = Object.keys(proc.nmAltitudes).map(Number).sort((a, b) => a - b);
+    if (keys.length === 0) return 0;
+
+    // 範囲外（最初の設定点より前、または最後の設定点より後）の処理
+    if (nm <= keys[0]) return proc.nmAltitudes[keys[0]].alt;
+    if (nm >= keys[keys.length - 1]) return proc.nmAltitudes[keys[keys.length - 1]].alt;
+
+    // 隣り合う設定ポイントを探す
+    let lower = keys[0];
+    let upper = keys[keys.length - 1];
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (nm >= keys[i] && nm <= keys[i + 1]) {
+        lower = keys[i];
+        upper = keys[i + 1];
+        break;
+      }
+    }
+
+    // 線形補間計算
+    const ratio = (nm - lower) / (upper - lower);
+    const altLow = proc.nmAltitudes[lower].alt;
+    const altHigh = proc.nmAltitudes[upper].alt;
+    return altLow + (altHigh - altLow) * ratio;
+  }, [proc.nmAltitudes]);
+
+  // 制限高度は補間せず、指定されたNM地点にのみ存在する（記号付き文字列に対応）
+  const getLimitData = (nm: number) => {
+    const roundedNM = Math.round(nm);
+    return (proc.nmAltitudes && proc.nmAltitudes[roundedNM])?.limit ?? null;
+  };
+
+  const linePoints = points.map(p => {
+    return [p.x, getInterpolatedAlt(p.nm) * altScale, p.z] as [number, number, number];
+  });
+
+  return (
+    <group>
+      {/* メイン経路ライン */}
+      <Line points={linePoints} color={color} lineWidth={2} transparent opacity={0.8} />
+
+      {/* NMマーカーと高度制限 */}
+      {markers.map((m, i) => {
+        const nm = parseFloat(m.label);
+        const y = getInterpolatedAlt(nm) * altScale;
+        const limitVal = getLimitData(nm);
+
+        return (
+          <group key={`${id}-nm-${i}`} position={[m.x, y, m.z]}>
+            {/* NM番号ラベル */}
+            <Text position={[0, -0.5, 0]} fontSize={0.7} color="#ffffff" rotation={[-Math.PI/2, 0, 0]}>
+              {`(${m.label})`}
+            </Text>
+            
+            {/* 新しい高度制限マーカー (グラデーションブロック) */}
+            <LimitMarker value={limitVal} y={y} altScale={altScale} />
+          </group>
+        );
+      })}
+    </group>
+  );
+};
+
+/**
+ * 高度制限マーカー Component
+ * at or above (+): 平面から下へフェード
+ * at or below (-): 平面から上へフェード
+ * mandatory (+-): 平面のみ
+ */
+const LimitMarker = ({ value, y, altScale }) => {
+  const parsed = useMemo(() => {
+    if (value === null || value === undefined) return null;
+    const s = value.toString();
+    const val = parseFloat(s);
+    let type: 'above' | 'below' | 'both' = 'both';
+    if (s.includes('+-')) type = 'both';
+    else if (s.includes('+')) type = 'above';
+    else if (s.includes('-')) type = 'below';
+    return { val, type };
+  }, [value]);
+
+  if (!parsed) return null;
+
+  // above(+) は青（安全な床）、below(-) は赤（警告の天井）
+  const color = parsed.type === 'above' ? "#3b82f6" : parsed.type === 'below' ? "#ef4444" : "#ffffff";
+  const limitY = parsed.val * altScale;
+  const relativeY = limitY - y; // 親グループからの相対高さ
+
+  return (
+    <group position={[0, relativeY, 0]}>
+      {/* 基準平面 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[1.5, 1.5]} />
+        <meshBasicMaterial color={color} transparent opacity={0.6} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* グラデーションブロック */}
+      {parsed.type !== 'both' && (
+        <mesh position={[0, parsed.type === 'above' ? -1 : 1, 0]}>
+          <boxGeometry args={[1.4, 2, 1.4]} />
+          <shaderMaterial
+            transparent
+            depthWrite={false}
+            uniforms={{
+              uColor: { value: new THREE.Color(color) },
+              uIsAbove: { value: parsed.type === 'above' }
+            }}
+            vertexShader={`
+              varying vec2 vUv;
+              void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }
+            `}
+            fragmentShader={`
+              uniform vec3 uColor;
+              uniform bool uIsAbove;
+              varying vec2 vUv;
+              void main() {
+                // Boxの側面UV(y)を利用してグラデーションを作成
+                float alpha = uIsAbove ? vUv.y : (1.0 - vUv.y);
+                gl_FragColor = vec4(uColor, alpha * 0.25);
+              }
+            `}
+          />
+        </mesh>
+      )}
+
+      <Text 
+        position={[0, parsed.type === 'below' ? 0.3 : -0.3, 0.8]} 
+        fontSize={0.5} 
+        color="#ffffff" 
+        rotation={[-Math.PI/2, 0, 0]}
+      >
+        {`${parsed.val}${parsed.type === 'above' ? '+' : parsed.type === 'below' ? '-' : ''}`}
+      </Text>
     </group>
   );
 };
@@ -359,7 +600,6 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
 
         {/* Fixes */}
         {layers.fixes && FIXES
-          .filter(fix => !fix.id.includes('IAP')) // IAP関連FIXをフィルタ
           .map(fix => (
             <MapPoint key={fix.id} lat={fix.lat} lon={fix.lon} color="#64748b" label={fix.id} altScale={altScale} />
           ))}
@@ -371,6 +611,12 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
           <Route3D key={r.id} route={r} getPos={getPos3D} altScale={altScale} />)}
         {layers.direct && DIRECT_ROUTES.map((r, idx) => 
           <Route3D key={r.id} route={r} getPos={getPos3D} altScale={altScale} />)}
+
+        {/* Procedures Rendering */}
+        {Object.keys(activeProcedures).map(pid => {
+          if (!activeProcedures[pid] || !PROCEDURES[pid]) return null;
+          return <Procedure3D key={pid} id={pid} proc={PROCEDURES[pid]} getPos={getPos3D} altScale={altScale} />;
+        })}
 
         {/* Unique Airborne Labels */}
         {routeWaypoints.map((wp, i) => {
