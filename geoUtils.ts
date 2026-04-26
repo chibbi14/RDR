@@ -28,6 +28,17 @@ export interface MVALabel {
   label: { deg: number; r: number };
 }
 
+export interface MVASectorResult {
+  id: string;
+  alt: string;
+  r1: number;
+  r2: number;
+  start: number;
+  end: number;
+  isFull: boolean;
+  label?: { deg: number; r: number };
+}
+
 export const ARP: Point = { lat: 35.493333, lon: 133.239167 }; // RJOH
 export const NM_TO_PX = 10;
 export const LON_CORRECTION = Math.cos(ARP.lat * Math.PI / 180); // 約 0.814
@@ -35,7 +46,7 @@ export const LON_CORRECTION = Math.cos(ARP.lat * Math.PI / 180); // 約 0.814
 /**
  * 緯度経度をキャンバス座標に変換
  */
-export const latLonToCanvas = (lat, lon, zoom, center = { x: 400, y: 400 }) => {
+export const latLonToCanvas = (lat: number, lon: number, zoom: number, center: { x: number; y: number } = { x: 400, y: 400 }) => {
   const y = -(lat - ARP.lat) * 60 * NM_TO_PX * zoom;
   const x = (lon - ARP.lon) * 60 * LON_CORRECTION * NM_TO_PX * zoom;
   return { x: center.x + x, y: center.y + y };
@@ -44,7 +55,7 @@ export const latLonToCanvas = (lat, lon, zoom, center = { x: 400, y: 400 }) => {
 /**
  * 方位と距離から新しい緯度経度を算出 (設計 3.2)
  */
-export const calcRelativeLatLon = (lat, lon, brgDeg, distNM) => {
+export const calcRelativeLatLon = (lat: number, lon: number, brgDeg: number, distNM: number): Point => {
   const brg = (brgDeg * Math.PI) / 180;
   const newLat = lat + (distNM * Math.cos(brg)) / 60;
   const newLon = lon + (distNM * Math.sin(brg)) / (60 * Math.cos((lat * Math.PI) / 180));
@@ -73,14 +84,14 @@ export const getIntercept = (p1: Point | null, hdg1: number, p2: Point | null, h
   };
 };
 
-export const dmsToDeg = (dmsStr) => {
+export const dmsToDeg = (dmsStr: string | number | undefined): number => {
   if (!dmsStr) return 0;
   const s = dmsStr.toString().replace(/[NSEW]/g, "");
   const match = s.match(/(\d{2,3})(\d{2})(\d{2}\.\d+|\d{2})/);
   if (!match) return 0;
-  const deg = parseFloat(match[1]);
-  const min = parseFloat(match[2]);
-  const sec = parseFloat(match[3]);
+  const deg = parseFloat(match[1] || "0");
+  const min = parseFloat(match[2] || "0");
+  const sec = parseFloat(match[3] || "0");
   return deg + min / 60 + sec / 3600;
 };
 
@@ -92,7 +103,7 @@ export const computeMVASectors = (
   radials: MVARadial[], 
   arcs: MVAArc[], 
   labels: MVALabel[]
-) => {
+): MVASectorResult[] => {
   if (!labels || labels.length === 0) return [];
 
   // 全ての境界円（リングと円弧）を統合
@@ -139,7 +150,8 @@ export const computeMVASectors = (
       r1, r2,
       start: bestStart,
       end: bestEnd,
-      isFull: (minDiffStart === 360 && minDiffEnd === 360)
+      isFull: (minDiffStart === 360 && minDiffEnd === 360),
+      label: l.label
     };
   });
 };

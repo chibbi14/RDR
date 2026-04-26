@@ -162,35 +162,54 @@ const p_m25_exit = calcRelativeLatLon(c_r2nm_m25.lat, c_r2nm_m25.lon, 355, 2.0);
 const oc_p073_2 = calcRelativeLatLon(RJOC_ARP.lat, RJOC_ARP.lon, 73, 2.0);
 const p_r2nm_hdg30 = calcRelativeLatLon(c_r2nm_d25.lat, c_r2nm_d25.lon, 300, 2);
 
-export const PROCEDURES = {
+export interface ProcedureRoute {
+  from: Point | string;
+  to: Point | string;
+  center?: Point | string;
+  type?: 'arc' | 'line';
+  radius?: number;
+  sweep?: number;
+  largeArc?: number;
+}
+
+export interface Procedure {
+  air: string;
+  type: string;
+  dash: string;
+  routes: ProcedureRoute[];
+  nmAltitudes?: Record<number, { alt: number; limit?: string }>;
+}
+
+export const PROCEDURES: Record<string, Procedure> = {
   // RJOH
-  'INABA_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: i25p1 }, { from: i25p1, to: i25p2_inaba, center: i25c1, type: 'arc', radius: 2.0, sweep: 0, largeArc: 1 }, { from: i25p2_inaba, to: i25vtx_inaba }, { from: i25vtx_inaba, to: 'INABA' }] },
-  'INABA_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: i07p1_inaba }, { from: i07p1_inaba, to: i07vtx_inaba }, { from: i07vtx_inaba, to: 'INABA' }] },
-  'SOUTH_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: s25p1 }, { from: s25p1, to: s25p2_south, center: s25c1_south, type: 'arc', radius: 2.0, sweep: 0 }, { from: s25p2_south, to: s25vtx }, { from: s25vtx, to: 'NIIMI' }] },
-  'SOUTH_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: s07p1 }, { from: s07p1, to: s07p2, center: s07c1, type: 'arc', radius: 2.0, sweep: 1 }, { from: s07p2, to: s07vtx }, { from: s07vtx, to: 'NIIMI' }] },
-  'DOZEN_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: s25p1 }, { from: s25p1, to: s25p2_dozen, center: s25c1_dozen, type: 'arc', radius: 1.273, sweep: 0, largeArc: 1 }, { from: s25p2_dozen, to: 'DOZEN' }] },
-  'DOZEN_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: i07p1_dozen }, { from: i07p1_dozen, to: i07p2_dozen, center: i07c1_dozen, type: 'arc', radius: 2.0, sweep: 0 }, { from: i07p2_dozen, to: i07vtx_dozen }, { from: i07vtx_dozen, to: 'DOZEN' }] },
-  'USAGI_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: u25p1 }, { from: u25p1, to: u25p2, center: u25c1, type: 'arc', radius: 3.0, sweep: 0, largeArc: 1 }, { from: u25p2, to: 'OH501' }, { from: 'OH501', to: 'YAPPA' }, { from: 'YAPPA', to: 'INABA' }] , nmAltitudes: { 0:{alt:14}, 12:{alt:5000}, 25:{alt:10000}, 33:{alt:13000, limit: "10000-"}, 39:{alt:15000}, 49:{alt:19000, limit: "8000+"} }},
-  'USAGI_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: calcRelativeLatLon(ARP.lat, ARP.lon, 64, 4.0) }, { from: calcRelativeLatLon(ARP.lat, ARP.lon, 64, 4.0), to: 'YAPPA' }, { from: 'YAPPA', to: 'INABA' }]  , nmAltitudes: { 0:{alt:14}, 8:{alt:5000}, 13:{alt:10000}, 16:{alt:13000, limit: "10000-"},  32:{alt:19000, limit: "8000+"} }},
-  'STAGE_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: u25p1 }, { from: u25p1, to: u25p2, center: u25c1, type: 'arc', radius: 3.0, sweep: 0, largeArc: 1 }, { from: u25p2, to: 'OH501' }, { from: 'OH501', to: 'OH701' }, { from: 'OH701', to: 'OH703' }, { from: 'OH703', to: 'STAGE' }] },  'STAGE_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: calcRelativeLatLon(ARP.lat, ARP.lon, 64, 4.0) }, { from: calcRelativeLatLon(ARP.lat, ARP.lon, 64, 4.0), to: 'OH701' }, { from: 'OH701', to: 'OH703' }, { from: 'OH703', to: 'STAGE' }] },
+  'INABA_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: i25p1 }, { from: i25p1, to: i25p2_inaba, center: i25c1, type: 'arc', radius: 2.0, sweep: 0, largeArc: 1 }, { from: i25p2_inaba, to: i25vtx_inaba }, { from: i25vtx_inaba, to: 'INABA' }] , nmAltitudes: { 0:{alt:14}, 3:{alt:500}, 33:{alt:10000, limit: "10000-"},  45:{alt:13000, limit: "8000+"} }},
+  'INABA_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: i07p1_inaba }, { from: i07p1_inaba, to: i07vtx_inaba }, { from: i07vtx_inaba, to: 'INABA' }] , nmAltitudes: { 0:{alt:14}, 3:{alt:500}, 20:{alt:10000, limit: "10000-"},  32:{alt:13000, limit: "8000+"} }},
+  'SOUTH_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: s25p1 }, { from: s25p1, to: s25p2_south, center: s25c1_south, type: 'arc', radius: 2.0, sweep: 0 }, { from: s25p2_south, to: s25vtx }, { from: s25vtx, to: 'NIIMI' }] , nmAltitudes: { 0:{alt:14}, 3:{alt:500}, 15:{alt:10000, limit: "10000-"},  24:{alt:15000, limit: "6000+"} }},
+  'SOUTH_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: s07p1 }, { from: s07p1, to: s07p2, center: s07c1, type: 'arc', radius: 2.0, sweep: 1 }, { from: s07p2, to: s07vtx }, { from: s07vtx, to: 'NIIMI' }] , nmAltitudes: { 0:{alt:14}, 3:{alt:500}, 18:{alt:10000, limit: "10000-"},  27:{alt:15000, limit: "6000+"} }},
+  'DOZEN_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: s25p1 }, { from: s25p1, to: s25p2_dozen, center: s25c1_dozen, type: 'arc', radius: 1.273, sweep: 0, largeArc: 1 }, { from: s25p2_dozen, to: 'DOZEN' }] , nmAltitudes: { 0:{alt:14}, 3:{alt:500}, 22:{alt:10000,limit:"10000-"}, 42:{alt:20000} } },
+  'DOZEN_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: i07p1_dozen }, { from: i07p1_dozen, to: i07p2_dozen, center: i07c1_dozen, type: 'arc', radius: 2.0, sweep: 0 }, { from: i07p2_dozen, to: i07vtx_dozen }, { from: i07vtx_dozen, to: 'DOZEN' }] , nmAltitudes: { 0:{alt:14}, 5:{alt:1000}, 15:{alt:10000,limit:"10000-"} , 35:{alt:20000}} },
+  'USAGI_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: u25p1 }, { from: u25p1, to: u25p2, center: u25c1, type: 'arc', radius: 3.0, sweep: 0, largeArc: 1 }, { from: u25p2, to: 'OH501' }, { from: 'OH501', to: 'YAPPA' }, { from: 'YAPPA', to: 'INABA' }] , nmAltitudes: { 0:{alt:14}, 12:{alt:5000}, 33:{alt:10000, limit: "10000-"}, 49:{alt:19000, limit: "8000+"} }},
+  'USAGI_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: calcRelativeLatLon(ARP.lat, ARP.lon, 64, 4.0) }, { from: calcRelativeLatLon(ARP.lat, ARP.lon, 64, 4.0), to: 'YAPPA' }, { from: 'YAPPA', to: 'INABA' }]  , nmAltitudes: { 0:{alt:14}, 8:{alt:5000},  16:{alt:10000, limit: "10000-"},  32:{alt:19000, limit: "8000+"} }},
+  'STAGE_25': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: u25p1 }, { from: u25p1, to: u25p2, center: u25c1, type: 'arc', radius: 3.0, sweep: 0, largeArc: 1 }, { from: u25p2, to: 'OH501' }, { from: 'OH501', to: 'OH701' }, { from: 'OH701', to: 'OH703' }, { from: 'OH703', to: 'STAGE' }], nmAltitudes: { 0:{alt:14}, 13:{alt:3700}, 22:{alt:6400}, 30:{alt:10000}, 37:{alt:10000,limit:"10000-"}, 75:{alt:19000} } },
+  'STAGE_07': { air: 'RJOH', type: 'SID', dash: '10, 5', routes: [{ from: ARP, to: calcRelativeLatLon(ARP.lat, ARP.lon, 64, 4.0) }, { from: calcRelativeLatLon(ARP.lat, ARP.lon, 64, 4.0), to: 'OH701' }, { from: 'OH701', to: 'OH703' }, { from: 'OH703', to: 'STAGE' }] , nmAltitudes: { 0:{alt:14}, 12:{alt:10000}, 19:{alt:10000,limit:"10000-"}, 57:{alt:19000} }},
 
   // RJOH TRSN (遷移)
-  'MS_TR': { air: 'RJOH', type: 'TRSN', dash: '20, 5', routes: [{ from: 'NIIMI', to: ms_arc_end, center: ARP, type: 'arc', radius: 20.4, sweep: 1 }, { from: ms_arc_end, to: 'MIYOS' }] },
-  'TZ_TR': { air: 'RJOH', type: 'TRSN', dash: '20, 5', routes: [{ from: 'INABA', to: 'TOZAN' }] },
-  'MZ_TR': { air: 'RJOH', type: 'TRSN', dash: '20, 5', routes: [{ from: 'INABA', to: 'YME' }] },
+  'MS_TR': { air: 'RJOH', type: 'TRSN', dash: '20, 5', routes: [{ from: 'NIIMI', to: ms_arc_end, center: ARP, type: 'arc', radius: 20.4, sweep: 1 }, { from: ms_arc_end, to: 'MIYOS' }], nmAltitudes: { 0:{alt:15000}, 19:{alt:20000}, 40:{alt:25000}} },
+  'TZ_TR': { air: 'RJOH', type: 'TRSN', dash: '20, 5', routes: [{ from: 'INABA', to: 'TOZAN' }] , nmAltitudes: { 0:{alt:13000}, 54:{alt:30000}}},
+  'MZ_TR': { air: 'RJOH', type: 'TRSN', dash: '20, 5', routes: [{ from: 'INABA', to: 'YME' }], nmAltitudes: { 0:{alt:13000}, 86:{alt:30000}}},
 
   // RJOH STAR (到着)
-  'GAINA_EAST': { air: 'RJOH', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA_H', to: 'GAINA' }] },
-  'GAINA_WEST': { air: 'RJOH', type: 'STAR', dash: '5, 3', routes: [{ from: 'PEPOS', to: 'OH561' }, { from: 'OH561', to: 'GAINA' }] },
-  'KYURI_EAST': { air: 'RJOH', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA_H', to: 'OH762' }, { from: 'OH762', to: 'OH761' }, { from: 'OH761', to: 'KYURI' }] },
-  'KYURI_WEST': { air: 'RJOH', type: 'STAR', dash: '5, 3', routes: [{ from: 'PEPOS', to: 'OH763' }, { from: 'OH763', to: 'KYURI' }] },
+  'GAINA_EAST': { air: 'RJOH', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA_H', to: 'GAINA' }], nmAltitudes: { 0:{alt:8000}, 8:{alt:4000, limit:"4000+"}} },
+  'GAINA_WEST': { air: 'RJOH', type: 'STAR', dash: '5, 3', routes: [{ from: 'PEPOS', to: 'OH561' }, { from: 'OH561', to: 'GAINA' }] , nmAltitudes: { 0:{alt:10000}, 39:{alt:4400}, 50:{alt:4000,limit:"4000+"}}},
+  'KYURI_EAST': { air: 'RJOH', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA_H', to: 'OH762' }, { from: 'OH762', to: 'OH761' }, { from: 'OH761', to: 'KYURI' }], nmAltitudes: { 0:{alt:8000}, 9:{alt:8000, limit:"5500+"}, 38:{alt:4000,limit:"4000+"}, 44:{alt:3500,limit:"3500+"} } },
+  'KYURI_WEST': { air: 'RJOH', type: 'STAR', dash: '5, 3', routes: [{ from: 'PEPOS', to: 'OH763' }, { from: 'OH763', to: 'KYURI' }] ,nmAltitudes: { 0:{alt:8000}, 13:{alt:5500, limit:"4000+"}, 25:{alt:3500}}},
 
   // RJOH IAP (進入)
-  'ILS_Z_25': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'ATMIK', to: 'DAIEI', center: 'IYV', type: 'arc', radius: 21.8, sweep: 0 }, { from: 'DAIEI', to: 'IF25', center: 'IYV', type: 'arc', radius: 21.8, sweep: 0 }, { from: 'IF25', to: 'FAF18' }, { from: 'FAF18', to: 'RW25' }] },
-  'ILS_X_25': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'SEKKY', to: 'GAINA', center: 'IYV', type: 'arc', radius: 15.9, sweep: 1 }, { from: 'GAINA', to: 'YUMII' }, { from: 'YUMII', to: 'RW25' }] },
-  'RNP_Z_07': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'KYURI', to: 'RW07' }] },
-  'RNP_Y_07': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'RAKDA_H', to: 'UGEPA' }, { from: 'UGEPA', to: 'OH753' }, { from: 'OH753', to: 'OH754' }, { from: 'OH754', to: 'OH755', center: rnp_ctr, type: 'arc', radius: 1.8, sweep: 1 }, { from: 'OH755', to: 'RW07' }] },
-  'TACAN_A': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'MINAT', to: 'tIF', center: 'JET', type: 'arc', radius: 17.0, sweep: 1 }, { from: 'tIF', to: 'tFAF' }, { from: 'tFAF', to: 'RW07' }] },
+  'ILS_Z_25': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'ATMIK', to: 'DAIEI', center: 'IYV', type: 'arc', radius: 21.8, sweep: 0 }, { from: 'DAIEI', to: 'IF25', center: 'IYV', type: 'arc', radius: 21.8, sweep: 0 }, { from: 'IF25', to: 'FAF18' }, { from: 'FAF18', to: 'RW25' }] , nmAltitudes: { 1:{alt:8000, limit:"6000+"}, 10:{alt:6000, limit:"4000+"}, 15:{alt:3000, limit:"3000+"}, 23:{alt:2500, limit:"2000+"}, 34:{alt:2000, limit:"2000"}, 40:{alt:14}}},
+  'ILS_X_25': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'SEKKY', to: 'GAINA', center: 'IYV', type: 'arc', radius: 15.9, sweep: 1 }, { from: 'GAINA', to: 'YUMII' }, { from: 'YUMII', to: 'RW25' }], nmAltitudes: { 1:{alt:3000, limit:"3000+"}, 5:{alt:2500, limit:"2000+"}, 15:{alt:2000, limit:"2000"}, 23:{alt:14}} },
+  'RNP_Z_07': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'KYURI', to: 'RW07' }],nmAltitudes: { 0:{alt:3500}, 16:{alt:14}}},
+  'RNP_Y_07': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'RAKDA_H', to: 'UGEPA' }, { from: 'UGEPA', to: 'OH753' }, { from: 'OH753', to: 'OH754' }, { from: 'OH754', to: 'OH755', center: rnp_ctr, type: 'arc', radius: 1.8, sweep: 1 }, { from: 'OH755', to: 'RW07' }],nmAltitudes: { 0:{alt:8000}, 22:{alt:3100, limit:"3100+"}, 34:{alt:14}}} ,
+  'TACAN_A': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'MINAT', to: 'tIF', center: 'JET', type: 'arc', radius: 17.0, sweep: 1 }, { from: 'tIF', to: 'tFAF' }, { from: 'tFAF', to: 'RW07' }], nmAltitudes: { 0:{alt:4000}, 8:{alt:3300, limit:"3300+"}, 19:{alt:14} } },
 
   // RJOC
   'DOZEN_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p250_4 }, { from: oc_p250_4, to: p_exit_hdg77, center: c_r2nm_d25, type: 'arc', radius: 2, sweep: 1 }, { from: p_exit_hdg77, to: p_intercept_dozen_25 }, { from: p_intercept_dozen_25, to: 'DOZEN' }] },
@@ -294,7 +313,9 @@ export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
       { type: 'line', r: 7, deg: 125 },
       { type: 'arc', r: 7, start: 125, end: 87 },
       { type: 'line', r: 30, deg: 87 },
-      { type: 'arc', r: 30, start: 87, end: 50 }
+      { type: 'arc', r: 30, start: 87, end: 50 },
+      { type: 'line', r: 0, deg: 50 }
+
     ]
   },
   {
@@ -394,9 +415,9 @@ export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
     alt: "30",
     centerId: "RJOH",
     path: [
-      { type: 'arc', r: 7, start: 87, end: 100 },
-      { type: 'line', r: 9, deg: 100 },
-      { type: 'arc', r: 9, start: 100, end: 87 }
+      { type: 'arc', r: 7, start: 87, end: 125 },
+      { type: 'line', r: 9, deg: 125 },
+      { type: 'arc', r: 9, start: 125, end: 87 }
     ]
   },
   {
@@ -414,7 +435,7 @@ export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
     alt: "55",
     centerId: "RJOH",
     path: [
-      { type: 'arc', r: 15, start: 100, end: 110 },
+      { type: 'arc', r: 13, start: 100, end: 110 },
       { type: 'line', r: 40, deg: 110 },
       { type: 'arc', r: 40, start: 110, end: 100 }
     ]
@@ -529,7 +550,7 @@ export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
     alt: "80",
     centerId: "RJOH",
     path: [
-      { type: 'arc', r: 15, start: 110, end: 145 },
+      { type: 'arc', r: 13, start: 110, end: 145 },
       { type: 'line', r: 25, deg: 145 },
       { type: 'arc', r: 25, start: 145, end: 110 }
     ]

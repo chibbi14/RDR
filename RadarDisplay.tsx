@@ -24,9 +24,10 @@ const RadarDisplay = () => {
     airways: false,
     direct: false,
     rnav: false,
-    mva3d: true
+    mva3d: true,
+    terrain: true // Layersの方に定義を移動
   });
-  const [activeProcedures, setActiveProcedures] = useState({
+  const [activeProcedures, setActiveProcedures] = useState({ 
     'INABA_25': true,
     'DOZEN_25_OC': true,
     'USAGI DEP': true,
@@ -169,12 +170,13 @@ const RadarDisplay = () => {
               { id: 'rnav', label: 'RNAV Routes', color: 'text-indigo-400' },
               { id: 'mva3d', label: 'MVA 3D Planes', color: 'text-cyan-200' },
               { id: 'direct', label: 'Direct Routes', color: 'text-emerald-500' },
+              { id: 'terrain', label: 'Terrain', color: 'text-green-400' },
             ].map(layer => (
               <label key={layer.id} className={`flex items-center gap-3 cursor-pointer text-[11px] ${layer.color} hover:bg-slate-700/50 p-1 rounded transition-colors`}>
                 <input 
                   type="checkbox" 
                   className="w-3 h-3 rounded bg-slate-900 border-slate-600 text-cyan-600 focus:ring-0 focus:ring-offset-0"
-                  checked={layers[layer.id]} 
+                  checked={!!layers[layer.id]} // undefined対策として論理値に変換
                   onChange={() => setLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))} 
                 />
                 {layer.label}

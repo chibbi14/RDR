@@ -1,28 +1,74 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Text, Line } from '@react-three/drei';
 import * as THREE from 'three';
-import { ARP, LON_CORRECTION, NM_TO_PX, computeMVASectors } from './geoUtils';
+import { ARP, LON_CORRECTION, computeMVASectors, Point, MVASectorResult } from './geoUtils';
 import { 
   AIRPORTS, VOR_DME, FIXES, AIRWAYS, RNAV_ROUTES, DIRECT_ROUTES, PROCEDURES,
   MVA_MANUAL_ARCS, MVA_MANUAL_RADIALS, MVA_RINGS, MVA_LABELS,
-  MVA_COMPLEX_SECTORS
+  MVA_COMPLEX_SECTORS,
+  PathSegment
 } from './navigationData';
+// Import the terrain creation function
+import { createTerrainMesh } from './createTerrain';
 
 const SCALE_3D = 1; // 1NM = 1 unit in 3D
 const ALT_BASE_FACTOR = 0.0005; 
 
 // MVAの高度表記（25 -> 2500）を変換するヘルパー
-const getNormalizedAlt = (alt) => {
-  const val = parseFloat(alt);
+const getNormalizedAlt = (alt: string | number): number => {
+  const val = typeof alt === 'string' ? parseFloat(alt) : alt;
   return val < 1000 ? val * 100 : val;
+};
+
+interface TerrainProps {
+  isVisible: boolean;
+  verticalScale: number;
+}
+
+// New component to load and display the terrain
+const TerrainComponent: React.FC<TerrainProps> = ({ isVisible, verticalScale }) => {
+  const [terrainGroup, setTerrainGroup] = useState<THREE.Group | null>(null);
+  const [currentMeshMaxAltNM, setCurrentMeshMaxAltNM] = useState(0);
+
+  useEffect(() => {
+    if (isVisible) {
+      // まだロードされていないか、verticalScale が変更された場合に地形をロード/再ロード
+      const firstChild = terrainGroup?.children[0] as THREE.Mesh;
+      const material = firstChild?.material as THREE.MeshStandardMaterial;
+      const needsReload = !terrainGroup || (firstChild && material?.displacementScale !== (currentMeshMaxAltNM * verticalScale));
+
+      if (needsReload) {
+        createTerrainMesh(verticalScale).then(({ terrainGroup: newGroup, meshMaxAltNM: newMeshMaxAltNM }) => {
+          setTerrainGroup(newGroup);
+          setCurrentMeshMaxAltNM(newMeshMaxAltNM);
+        }).catch(error => {
+          console.error("Failed to load terrain:", error);
+        });
+      }
+    }
+  }, [isVisible, terrainGroup, verticalScale, currentMeshMaxAltNM]); // 依存配列にcurrentMeshMaxAltNMを追加
+
+  // Render the loaded THREE.Mesh using <primitive>
+  return isVisible && terrainGroup ? <primitive object={terrainGroup} /> : null;
 };
 
 const CoordinateGrid = () => (
   <gridHelper args={[200, 20, 0x334155, 0x1e293b]} rotation={[0, 0, 0]} />
 );
+
+interface MVAComplexSectorMeshProps {
+  id: string;
+  alt: string;
+  centerId?: string;
+  path: PathSegment[];
+  label?: { deg: number; r: number };
+  altScale: number;
+  getPos3D: (tgt: string | Point) => { x_3d: number; y_3d: number; z_3d: number };
+}
+
 // 基準点オフセットと任意経路（Arc/Line）に対応したMVAセクタ
-const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale, getPos3D }) => {
+const MVAComplexSectorMesh: React.FC<MVAComplexSectorMeshProps> = ({ alt, centerId = 'ARP', path, label, altScale, getPos3D }) => {
   const normalizedAlt = getNormalizedAlt(alt);
   const yPos = normalizedAlt * altScale;
   const centerPos = getPos3D(centerId);
@@ -53,7 +99,7 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale
 
         for(let i=1; i<=steps; i++) {
           const a = sR + (eR - sR) * (i/steps);
-          pts.push([Math.cos(a) * seg.r, 0, Math.sin(a) * seg.r]); // Removed LON_CORRECTION
+          pts.push([Math.cos(a) * seg.r, 0, Math.sin(a) * seg.r] as [number, number, number]); // Removed LON_CORRECTION
         }
       }
     });
@@ -97,11 +143,11 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale
     // 1. 手動設定(label)がある場合はそれを優先（deg, r を 3D 座標に変換）
     if (label) {
       const rad = (label.deg - 90) * Math.PI / 180;
-      return [Math.cos(rad) * label.r, 1.5, Math.sin(rad) * label.r];
+      return [Math.cos(rad) * label.r, 1.5, Math.sin(rad) * label.r] as [number, number, number];
     }
 
     // 2. 面積重心の計算
-    if (borderPoints.length < 3) return [0, 1.5, 0];
+    if (borderPoints.length < 3) return [0, 1.5, 0] as [number, number, number];
     
     // 面積重心（Centroid of Area）を計算して凹型図形でも内部に収まるようにする
     let area = 0;
@@ -113,17 +159,17 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale
       const p2 = borderPoints[i + 1];
       const crossProduct = p1[0] * p2[2] - p2[0] * p1[2];
       area += crossProduct;
-      cx += (p1[0] + p2[0]) * crossProduct;
+      cx += (p1[0] + p2[0]) * (crossProduct || 0);
       cz += (p1[2] + p2[2]) * crossProduct;
     }
     
     area /= 2;
     if (Math.abs(area) < 0.01) {
       // 図形が潰れている場合のフォールバック
-      return [borderPoints[0][0], 1.5, borderPoints[0][2]];
+      return [borderPoints[0][0], 1.5, borderPoints[0][2]] as [number, number, number];
     }
     
-    return [cx / (6 * area), 1.5, cz / (6 * area)];
+    return [cx / (6 * area), 1.5, cz / (6 * area)] as [number, number, number];
   }, [borderPoints, label]);
 
   return (
@@ -131,10 +177,10 @@ const MVAComplexSectorMesh = ({ id, alt, centerId = 'ARP', path, label, altScale
       <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
         <shapeGeometry args={[shape, 32]} />
         <meshBasicMaterial 
-          color="#00d5ff" transparent opacity={0.1} side={THREE.DoubleSide} depthWrite={false} 
+          color="#00d5ff" transparent opacity={0.2} side={THREE.DoubleSide} depthWrite={false} 
         />
       </mesh>
-      <Line points={borderPoints} color="#13f3d9" lineWidth={1} opacity={0.6} transparent />
+      <Line points={borderPoints} color="#13f3d9" lineWidth={0.5} opacity={0.6} transparent />
       
       {/* 垂直な壁の追加 */}
       <mesh position={[0, -yPos, 0]} geometry={wallGeometry} renderOrder={2}>
@@ -161,12 +207,12 @@ const MVAGrid3D = () => {
         const z1 = r.r1 * Math.sin((r.deg - 90) * Math.PI / 180) * SCALE_3D;
         const x2 = r.r2 * Math.cos((r.deg - 90) * Math.PI / 180) * SCALE_3D * LON_CORRECTION;
         const z2 = r.r2 * Math.sin((r.deg - 90) * Math.PI / 180) * SCALE_3D;
-        return <Line key={`rad-${i}`} points={[[x1, 0, z1], [x2, 0, z2]]} color="#00ff48" lineWidth={0.5} opacity={0.2} transparent />;
+        return <Line key={`rad-${i}`} points={[[x1, 0, z1], [x2, 0, z2]] as [number, number, number][]} color="#00ff48" lineWidth={0.5} opacity={0.2} transparent />;
       })}
       
       {/* 円弧の描画 */}
       {MVA_MANUAL_ARCS.map((a, i) => {
-        const pts = [];
+        const pts: [number, number, number][] = [];
         const segments = 64;
         const startRad = (a.start - 90) * Math.PI / 180;
         let endRad = (a.end - 90) * Math.PI / 180;
@@ -180,7 +226,7 @@ const MVAGrid3D = () => {
             a.r * Math.cos(angle) * SCALE_3D * LON_CORRECTION,
             0,
             a.r * Math.sin(angle) * SCALE_3D
-          ]);
+          ] as [number, number, number]);
         }
         return <Line key={`arc-${i}`} points={pts} color="#00ff2f" lineWidth={0.5} opacity={0.2} transparent />;
       })}
@@ -188,7 +234,16 @@ const MVAGrid3D = () => {
   );
 };
 
-const MapPoint = ({ lat, lon, alt = 0, color, label, altScale }) => {
+interface MapPointProps {
+  lat: number;
+  lon: number;
+  alt?: number;
+  color: string;
+  label: string;
+  altScale: number;
+}
+
+const MapPoint: React.FC<MapPointProps> = ({ lat, lon, alt = 0, color, label, altScale }): JSX.Element => {
   const pos = [
     (lon - ARP.lon) * 60 * LON_CORRECTION * SCALE_3D,
     alt * altScale,
@@ -205,7 +260,7 @@ const MapPoint = ({ lat, lon, alt = 0, color, label, altScale }) => {
         {label}
       </Text>
       {alt > 0 && (
-        <Line points={[[0, 0, 0], [0, -alt * altScale, 0]]} color="#044eb7" lineWidth={0.5} dashed />
+        <Line points={[[0, 0, 0], [0, -alt * altScale, 0]] as [number, number, number][]} color="#044eb7" lineWidth={0.5} dashed />
       )}
     </group>
   );
@@ -214,10 +269,10 @@ const MapPoint = ({ lat, lon, alt = 0, color, label, altScale }) => {
 /**
  * プロシージャーを1NM刻みのポイントに分割し、高度制限とマーカーを計算する
  */
-const useProcedureNMPoints = (proc, getPos3D) => {
+const useProcedureNMPoints = (proc: any, getPos3D: (tgt: any) => any) => {
   return useMemo(() => {
-    const points = [];
-    const markers = [];
+    const points: {x: number, z: number, nm: number}[] = [];
+    const markers: {x: number, z: number, nm: number, label: string}[] = [];
     let totalDist = 0;
     let lastNMDist = 0;
 
@@ -307,7 +362,14 @@ const useProcedureNMPoints = (proc, getPos3D) => {
   }, [proc, getPos3D]);
 };
 
-const Procedure3D = ({ id, proc, getPos, altScale }) => {
+interface Procedure3DProps {
+  id: string;
+  proc: any;
+  getPos: (tgt: any) => { x_3d: number; y_3d: number; z_3d: number };
+  altScale: number;
+}
+
+const Procedure3D: React.FC<Procedure3DProps> = ({ id, proc, getPos, altScale }) => {
   const COLORS = {
     RJOH_SID: '#22d3ee',
     RJOH_ARR: '#f472b6',
@@ -328,8 +390,8 @@ const Procedure3D = ({ id, proc, getPos, altScale }) => {
     if (keys.length === 0) return 0;
 
     // 範囲外（最初の設定点より前、または最後の設定点より後）の処理
-    if (nm <= keys[0]) return proc.nmAltitudes[keys[0]].alt;
-    if (nm >= keys[keys.length - 1]) return proc.nmAltitudes[keys[keys.length - 1]].alt;
+    if (nm <= keys[0]) return (proc.nmAltitudes[keys[0]] as any).alt;
+    if (nm >= keys[keys.length - 1]) return (proc.nmAltitudes[keys[keys.length - 1]] as any).alt;
 
     // 隣り合う設定ポイントを探す
     let lower = keys[0];
@@ -344,8 +406,8 @@ const Procedure3D = ({ id, proc, getPos, altScale }) => {
 
     // 線形補間計算
     const ratio = (nm - lower) / (upper - lower);
-    const altLow = proc.nmAltitudes[lower].alt;
-    const altHigh = proc.nmAltitudes[upper].alt;
+    const altLow = (proc.nmAltitudes[lower] as any).alt;
+    const altHigh = (proc.nmAltitudes[upper] as any).alt;
     return altLow + (altHigh - altLow) * ratio;
   }, [proc.nmAltitudes]);
 
@@ -392,7 +454,13 @@ const Procedure3D = ({ id, proc, getPos, altScale }) => {
  * at or below (-): 平面から上へフェード
  * mandatory (+-): 平面のみ
  */
-const LimitMarker = ({ value, y, altScale }) => {
+interface LimitMarkerProps {
+  value: string | number | null;
+  y: number;
+  altScale: number;
+}
+
+const LimitMarker: React.FC<LimitMarkerProps> = ({ value, y, altScale }) => {
   const parsed = useMemo(() => {
     if (value === null || value === undefined) return null;
     const s = value.toString();
@@ -463,10 +531,16 @@ const LimitMarker = ({ value, y, altScale }) => {
   );
 };
 
-const Route3D = ({ route, getPos, altScale }) => {
+interface Route3DProps {
+  route: any;
+  getPos: (tgt: any) => { x_3d: number; y_3d: number; z_3d: number };
+  altScale: number;
+}
+
+const Route3D: React.FC<Route3DProps> = ({ route, getPos }) => {
   return (
     <group>
-      {route.waypoints.slice(0, -1).map((wp, i) => {
+      {route.waypoints.slice(0, -1).map((wp: any, i: number) => {
         const start = getPos(wp);
         const end = getPos(route.waypoints[i + 1]);
         
@@ -474,7 +548,7 @@ const Route3D = ({ route, getPos, altScale }) => {
         const horizontalPoints = [
           [start.x_3d, start.y_3d, start.z_3d],
           [end.x_3d, start.y_3d, end.z_3d]
-        ];
+        ] as [number, number, number][];
 
         // 次のウェイポイントへの垂直なステップ線
         // 地面(0)から、その遷移地点における最高高度までを描画
@@ -482,7 +556,7 @@ const Route3D = ({ route, getPos, altScale }) => {
         const verticalPoints = [
           [end.x_3d, 0, end.z_3d],
           [end.x_3d, maxHeight, end.z_3d]
-        ];
+        ] as [number, number, number][];
         
         return (
           <group key={`${route.id}-${i}`}>
@@ -497,11 +571,17 @@ const Route3D = ({ route, getPos, altScale }) => {
   );
 };
 
-const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
+interface RadarDisplay3DProps {
+  layers: any;
+  activeProcedures: any;
+  verticalScale: number;
+}
+
+const RadarDisplay3D: React.FC<RadarDisplay3DProps> = ({ layers, activeProcedures, verticalScale }) => {
   const altScale = ALT_BASE_FACTOR * verticalScale;
 
   // MVAの境界線とラベルデータから、動的にセクタのジオメトリ範囲を計算
-  const allMvaSectors = useMemo(() => {
+  const allMvaSectors = useMemo((): any[] => {
     if (!layers.mva) return [];
 
     // 1. 重複を避けるため、正規化された高度のリストを作成
@@ -532,9 +612,9 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
 
     // 2. カスタムセクタ（複雑な形状）と統合
     return [...convertedStandard, ...MVA_COMPLEX_SECTORS];
-  }, [layers.mva]);
+  }, [layers.mva]); // computeMVASectors is stable, but adding it won't hurt
 
-  const getPos3D = (tgt) => {
+  const getPos3D = useCallback((tgt: any) => {
     const id = typeof tgt === 'string' ? tgt : (tgt && tgt.id);
     const allPoints = [...FIXES, ...VOR_DME, ...AIRPORTS];
     const f = allPoints.find(n => n.id === id);
@@ -547,18 +627,18 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
       y_3d: alt * altScale,
       z_3d: -(lat - ARP.lat) * 60 * SCALE_3D
     };
-  };
+  }, [altScale]);
 
   // ルート上のユニークなFIX/Waypointを抽出してラベルを描画する
-  const routeWaypoints = useMemo(() => {
+  const routeWaypoints = useMemo((): any[] => {
     const seen = new Set();
-    const waypoints = [];
-    const activeRoutes = [
+    const waypoints: any[] = [];
+    const activeRoutes: any[] = [
       ...(layers.airways ? AIRWAYS : []),
       ...(layers.rnav ? RNAV_ROUTES : []),
       ...(layers.direct ? DIRECT_ROUTES : [])
     ];
-    activeRoutes.forEach(route => {
+    activeRoutes.forEach((route: any) => {
       route.waypoints.forEach(wp => {
         const id = typeof wp === 'string' ? wp : wp.id;
         if (!seen.has(id)) { seen.add(id); waypoints.push(wp); }
@@ -577,13 +657,16 @@ const RadarDisplay3D = ({ layers, activeProcedures, verticalScale }) => {
         
         <CoordinateGrid />
 
+        {/* Terrain */}
+        {layers.terrain && <TerrainComponent isVisible={layers.terrain} verticalScale={verticalScale} />}
+
         {/* MVA Grid, Sectors & Labels */}
         {layers.mva && (
           <group>
             <MVAGrid3D />
             {/* 統一された MVAComplexSectorMesh を唯一のレンダラーとして使用 */}
             {layers.mva3d && allMvaSectors.map((s) => (
-              <MVAComplexSectorMesh key={s.id} {...s} altScale={altScale} getPos3D={getPos3D} />
+              <MVAComplexSectorMesh key={s.id} id={s.id} alt={s.alt} centerId={s.centerId} path={s.path} label={s.label} altScale={altScale} getPos3D={getPos3D} />
             ))}
           </group>
         )}
