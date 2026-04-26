@@ -4,12 +4,11 @@ import { OrbitControls, PerspectiveCamera, Text, Line } from '@react-three/drei'
 import * as THREE from 'three';
 import { ARP, LON_CORRECTION, computeMVASectors, Point, MVASectorResult } from './geoUtils';
 import { 
-  AIRPORTS, VOR_DME, FIXES, AIRWAYS, RNAV_ROUTES, DIRECT_ROUTES, PROCEDURES,
+  AIRPORTS, VOR_DME, FIXES, AIRWAYS, RNAV_ROUTES, DIRECT_ROUTES, PROCEDURES, ACA_POINTS_NM,
   MVA_MANUAL_ARCS, MVA_MANUAL_RADIALS, MVA_RINGS, MVA_LABELS,
   MVA_COMPLEX_SECTORS,
   PathSegment
 } from './navigationData';
-// Import the terrain creation function
 import { createTerrainMesh } from './createTerrain';
 
 const SCALE_3D = 1; // 1NM = 1 unit in 3D
@@ -33,7 +32,6 @@ const TerrainComponent: React.FC<TerrainProps> = ({ isVisible, verticalScale }) 
 
   useEffect(() => {
     if (isVisible) {
-      // まだロードされていないか、verticalScale が変更された場合に地形をロード/再ロード
       const firstChild = terrainGroup?.children[0] as THREE.Mesh;
       const material = firstChild?.material as THREE.MeshStandardMaterial;
       const needsReload = !terrainGroup || (firstChild && material?.displacementScale !== (currentMeshMaxAltNM * verticalScale));
@@ -74,18 +72,18 @@ const MVAComplexSectorMesh: React.FC<MVAComplexSectorMeshProps> = ({ alt, center
   const centerPos = getPos3D(centerId);
 
   const borderPoints = useMemo(() => {
-    const pts = [];
+    const pts: [number, number, number][] = [];
     if (path.length === 0) return pts;
 
     // 開始点を追加
     const first = path[0];
     const startAngle = ((first.type === 'arc' ? first.start : first.deg) - 90) * Math.PI / 180;
-    pts.push([Math.cos(startAngle) * first.r, 0, Math.sin(startAngle) * first.r]); // Removed LON_CORRECTION
+    pts.push([Math.cos(startAngle) * first.r, 0, Math.sin(startAngle) * first.r] as [number, number, number]);
 
     path.forEach(seg => {
       if (seg.type === 'line') {
         const rad = (seg.deg - 90) * Math.PI / 180;
-         pts.push([Math.cos(rad) * seg.r, 0, Math.sin(rad) * seg.r]); // Removed LON_CORRECTION
+        pts.push([Math.cos(rad) * seg.r, 0, Math.sin(rad) * seg.r] as [number, number, number]);
        } else {
         const steps = 32;
         let sR = (seg.start - 90) * Math.PI / 180;
@@ -96,10 +94,9 @@ const MVAComplexSectorMesh: React.FC<MVAComplexSectorMeshProps> = ({ alt, center
         // 補間方向の調整: 航空CWなら数学CCW(eR > sR)へ
         if (isAviationCW && eR <= sR) eR += Math.PI * 2;
         if (!isAviationCW && sR <= eR) sR += Math.PI * 2;
-
         for(let i=1; i<=steps; i++) {
           const a = sR + (eR - sR) * (i/steps);
-          pts.push([Math.cos(a) * seg.r, 0, Math.sin(a) * seg.r] as [number, number, number]); // Removed LON_CORRECTION
+          pts.push([Math.cos(a) * seg.r, 0, Math.sin(a) * seg.r] as [number, number, number]);
         }
       }
     });
@@ -162,10 +159,8 @@ const MVAComplexSectorMesh: React.FC<MVAComplexSectorMeshProps> = ({ alt, center
       cx += (p1[0] + p2[0]) * (crossProduct || 0);
       cz += (p1[2] + p2[2]) * crossProduct;
     }
-    
     area /= 2;
     if (Math.abs(area) < 0.01) {
-      // 図形が潰れている場合のフォールバック
       return [borderPoints[0][0], 1.5, borderPoints[0][2]] as [number, number, number];
     }
     
@@ -243,8 +238,8 @@ interface MapPointProps {
   altScale: number;
 }
 
-const MapPoint: React.FC<MapPointProps> = ({ lat, lon, alt = 0, color, label, altScale }): JSX.Element => {
-  const pos = [
+const MapPoint: React.FC<MapPointProps> = ({ lat, lon, alt = 0, color, label, altScale }) => {
+  const pos: [number, number, number] = [
     (lon - ARP.lon) * 60 * LON_CORRECTION * SCALE_3D,
     alt * altScale,
     -(lat - ARP.lat) * 60 * SCALE_3D
@@ -253,7 +248,7 @@ const MapPoint: React.FC<MapPointProps> = ({ lat, lon, alt = 0, color, label, al
   return (
     <group position={pos}>
       <mesh>
-        <sphereGeometry args={[alt > 0 ? 0.2 : 0.4, 8, 8]} />
+        <sphereGeometry args={[alt > 0 ? 0.05 : 0.1, 8, 8]} />
         <meshBasicMaterial color={color} />
       </mesh>
       <Text position={[0.5, 0.5, 0]} fontSize={0.5} color={color} anchorX="left">
@@ -272,7 +267,6 @@ const MapPoint: React.FC<MapPointProps> = ({ lat, lon, alt = 0, color, label, al
 const useProcedureNMPoints = (proc: any, getPos3D: (tgt: any) => any) => {
   return useMemo(() => {
     const points: {x: number, z: number, nm: number}[] = [];
-    const markers: {x: number, z: number, nm: number, label: string}[] = [];
     let totalDist = 0;
     let lastNMDist = 0;
 
@@ -324,12 +318,6 @@ const useProcedureNMPoints = (proc: any, getPos3D: (tgt: any) => any) => {
             nm: currentTotal
           };
           points.push(pos);
-
-          if (currentTotal >= lastNMDist + 1) {
-            const nm = Math.floor(currentTotal);
-            markers.push({ ...pos, label: nm.toString() });
-            lastNMDist = nm;
-          }
         }
         totalDist += arcNM;
       } else {
@@ -347,18 +335,12 @@ const useProcedureNMPoints = (proc: any, getPos3D: (tgt: any) => any) => {
             nm: currentTotal
           };
           points.push(pos);
-
-          if (currentTotal >= lastNMDist + 1) {
-            const nm = Math.floor(currentTotal);
-            markers.push({ ...pos, label: nm.toString() });
-            lastNMDist = nm;
-          }
         }
         totalDist += segDist;
       }
     });
 
-    return { points, markers };
+    return { points };
   }, [proc, getPos3D]);
 };
 
@@ -381,7 +363,7 @@ const Procedure3D: React.FC<Procedure3DProps> = ({ id, proc, getPos, altScale })
     ? (proc.type === 'SID' ? COLORS.RJOC_SID : COLORS.RJOC_ARR) 
     : (proc.type === 'SID' ? COLORS.RJOH_SID : COLORS.RJOH_ARR);
 
-  const { points, markers } = useProcedureNMPoints(proc, getPos);
+  const { points } = useProcedureNMPoints(proc, getPos);
 
   // 設定された高度ポイント間を線形補間する関数
   const getInterpolatedAlt = useMemo(() => (nm: number) => {
@@ -411,36 +393,36 @@ const Procedure3D: React.FC<Procedure3DProps> = ({ id, proc, getPos, altScale })
     return altLow + (altHigh - altLow) * ratio;
   }, [proc.nmAltitudes]);
 
-  // 制限高度は補間せず、指定されたNM地点にのみ存在する（記号付き文字列に対応）
-  const getLimitData = (nm: number) => {
-    const roundedNM = Math.round(nm);
-    return (proc.nmAltitudes && proc.nmAltitudes[roundedNM])?.limit ?? null;
-  };
-
   const linePoints = points.map(p => {
     return [p.x, getInterpolatedAlt(p.nm) * altScale, p.z] as [number, number, number];
   });
+
+  // 高度制限(limit)が定義されている地点を抽出し、表示用データを生成
+  const markersWithLimits = useMemo(() => {
+    if (!proc.nmAltitudes || points.length === 0) return [];
+    return Object.entries(proc.nmAltitudes)
+      .filter(([_, data]: [string, any]) => data.limit)
+      .map(([nmStr, data]: [string, any]) => {
+        const targetNM = parseFloat(nmStr);
+        // パス上のポイントから指定のNMに最も近い地点を特定
+        const p = points.reduce((prev, curr) => 
+          Math.abs(curr.nm - targetNM) < Math.abs(prev.nm - targetNM) ? curr : prev
+        , points[0]);
+        return { ...p, limit: data.limit };
+      });
+  }, [proc.nmAltitudes, points]);
 
   return (
     <group>
       {/* メイン経路ライン */}
       <Line points={linePoints} color={color} lineWidth={2} transparent opacity={0.8} />
 
-      {/* NMマーカーと高度制限 */}
-      {markers.map((m, i) => {
-        const nm = parseFloat(m.label);
-        const y = getInterpolatedAlt(nm) * altScale;
-        const limitVal = getLimitData(nm);
-
+      {/* 高度制限マーカーの復元 */}
+      {markersWithLimits.map((m, i) => {
+        const y = getInterpolatedAlt(m.nm) * altScale;
         return (
-          <group key={`${id}-nm-${i}`} position={[m.x, y, m.z]}>
-            {/* NM番号ラベル */}
-            <Text position={[0, -0.5, 0]} fontSize={0.7} color="#ffffff" rotation={[-Math.PI/2, 0, 0]}>
-              {`(${m.label})`}
-            </Text>
-            
-            {/* 新しい高度制限マーカー (グラデーションブロック) */}
-            <LimitMarker value={limitVal} y={y} altScale={altScale} />
+          <group key={`${id}-limit-${i}`} position={[m.x, y, m.z]}>
+            <LimitMarker value={m.limit} y={y} altScale={altScale} />
           </group>
         );
       })}
@@ -571,6 +553,190 @@ const Route3D: React.FC<Route3DProps> = ({ route, getPos }) => {
   );
 };
 
+/**
+ * 航空路保護空域 (Protected Airspace)
+ * 46NMまで幅4NM、それ以降は5度で拡大する
+ */
+const AirwayProtectedArea = ({ route, getPos, altScale }: Route3DProps) => {
+  const TAN5 = Math.tan(5 * Math.PI / 180);
+
+  return (
+    <group>
+      {route.waypoints.slice(0, -1).map((wp: any, i: number) => {
+        const start = getPos(wp);
+        const end = getPos(route.waypoints[i + 1]);
+
+        // 2D平面上のベクトルと距離
+        const dx = end.x_3d - start.x_3d;
+        const dz = end.z_3d - start.z_3d;
+        const lengthNM = Math.sqrt((dx / LON_CORRECTION) ** 2 + dz ** 2);
+        
+        // 単位方向ベクトルと法線ベクトル
+        const ux = dx / lengthNM;
+        const uz = dz / lengthNM;
+        const nx = -uz; // 法線 X
+        const nz = ux;  // 法線 Z (LON_CORRECTIONは後で適用)
+
+        // サンプリングポイントの計算 (始点, 46NM, 中間点, 終点-46NM, 終点)
+        const steps = [0];
+        if (lengthNM > 46) steps.push(46);
+        steps.push(lengthNM / 2);
+        if (lengthNM > 46) steps.push(lengthNM - 46);
+        steps.push(lengthNM);
+        const sortedSteps = Array.from(new Set(steps)).sort((a, b) => a - b);
+
+        const vertices: number[] = [];
+        const indices: number[] = [];
+
+        // 左右の頂点を生成
+        const sidePoints: [number, number, number][][] = [[], []]; // 0:Left, 1:Right
+
+        sortedSteps.forEach(d => {
+          // どちらの端点からも46NMを超えた分に対して5度の広がりを適用
+          const distFromFix = Math.min(d, lengthNM - d);
+          const width = distFromFix <= 46 ? 4 : 4 + (distFromFix - 46) * TAN5;
+          
+          const px = start.x_3d + (ux * d);
+          const pz = start.z_3d + (uz * d);
+          const py = (start.y_3d + (end.y_3d - start.y_3d) * (d / lengthNM));
+
+          // 左側
+          sidePoints[0].push([px + nx * width * LON_CORRECTION, py, pz + nz * width]);
+          // 右側
+          sidePoints[1].push([px - nx * width * LON_CORRECTION, py, pz - nz * width]);
+        });
+
+        // メッシュの構築
+        const allPts = [...sidePoints[0], ...sidePoints[1].reverse()];
+        const geometry = new THREE.BufferGeometry();
+        const flatVertices = new Float32Array(allPts.flat());
+        
+        // 単純なポリゴン分割 (扇状)
+        const triangleIndices = [];
+        for (let j = 1; j < allPts.length - 1; j++) {
+          triangleIndices.push(0, j, j + 1);
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(flatVertices, 3));
+        geometry.setIndex(triangleIndices);
+        geometry.computeVertexNormals();
+
+        return (
+          <group key={`protect-${route.id}-${i}`}>
+            <mesh geometry={geometry}>
+              <meshBasicMaterial 
+                color={route.color || '#94a3b8'} 
+                transparent 
+                opacity={0.1} 
+                side={THREE.DoubleSide} 
+                depthWrite={false}
+              />
+            </mesh>
+            <Line points={allPts.concat([allPts[0]])} color={route.color || '#94a3b8'} lineWidth={0.5} opacity={0.3} transparent />
+          </group>
+        );
+      })}
+    </group>
+  );
+};
+
+/**
+ * ACA (Airspace Control Area) Boundary for 3D
+ * 2Dの境界線を3D空間に「フェンス」として可視化します
+ */
+const ACABoundary3D = ({ altScale }: { altScale: number }) => {
+  const color = "#fbbf24"; // 2D版と合わせたイエロー/アンバー
+  const fenceHeight = 5000 * altScale; // 5000ft相当の高さの垂直ガイド
+
+  // 管制空域の「壁」を生成する内部コンポーネント
+  const Wall = ({ points }: { points: [number, number, number][] }) => {
+    const geometry = useMemo(() => {
+      const vertices: number[] = [];
+      const indices: number[] = [];
+      
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i+1];
+        const base = vertices.length / 3;
+        // 下端(地面)と上端(5000ft)の4点を追加
+        vertices.push(p1[0], 0, p1[2], p2[0], 0, p2[2], p1[0], fenceHeight, p1[2], p2[0], fenceHeight, p2[2]);
+        // 2つの三角形でパネルを構成
+        indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+      }
+      
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      geom.setIndex(indices);
+      return geom;
+    }, [points]);
+
+    return <mesh geometry={geometry}><meshBasicMaterial color={color} transparent opacity={0.1} side={THREE.DoubleSide} depthWrite={false} /></mesh>;
+  };
+
+  const getACA3D = (id: number, y = 0) => {
+    const p = ACA_POINTS_NM[id as keyof typeof ACA_POINTS_NM];
+    return [p.x * LON_CORRECTION, y, -p.y] as [number, number, number];
+  };
+
+  const createArc = (startId: number, endId: number, r: number, sweep: number) => {
+    const start = ACA_POINTS_NM[startId as keyof typeof ACA_POINTS_NM];
+    const end = ACA_POINTS_NM[endId as keyof typeof ACA_POINTS_NM];
+    let startAngle = Math.atan2(-start.y, start.x);
+    let endAngle = Math.atan2(-end.y, end.x);
+    
+    // 旋回方向に応じた角度補正
+    if (sweep === 1 && endAngle <= startAngle) endAngle += Math.PI * 2;
+    if (sweep === 0 && startAngle <= endAngle) startAngle += Math.PI * 2;
+
+    const points: [number, number, number][] = [];
+    const segments = 32;
+    for (let i = 0; i <= segments; i++) {
+      const angle = startAngle + (endAngle - startAngle) * (i / segments);
+      points.push([Math.cos(angle) * r * LON_CORRECTION, 0, Math.sin(angle) * r]);
+    }
+    return points;
+  };
+
+  const lineSegments = [[7, 4], [4, 3], [3, 1], [8, 5], [8, 6], [9, 11]];
+  const arcs = [
+    { s: 7, e: 12, r: 34, sw: 1 },
+    { s: 9, e: 2, r: 25, sw: 1 },
+    { s: 10, e: 11, r: 34, sw: 1 }
+  ];
+
+  return (
+    <group>
+      {/* 境界線と半透明の壁(カーテン) */}
+      {lineSegments.map(([s, e], i) => {
+        const pts = [getACA3D(s), getACA3D(e)];
+        return (
+          <group key={`aca-l-group-${i}`}>
+            <Line points={pts} color={color} lineWidth={1.5} opacity={0.4} transparent />
+            <Wall points={pts} />
+          </group>
+        );
+      })}
+
+      {arcs.map((a, i) => {
+        const pts = createArc(a.s, a.e, a.r, a.sw);
+        return (
+          <group key={`aca-a-group-${i}`}>
+            <Line points={pts} color={color} lineWidth={1.5} opacity={0.4} transparent />
+            <Wall points={pts} />
+          </group>
+        );
+      })}
+
+      {/* 垂直なコーナー線（境界を強調） */}
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(id => {
+        const p = getACA3D(id);
+        const pTop = [p[0], fenceHeight, p[2]] as [number, number, number];
+        return <Line key={`aca-v-${id}`} points={[p, pTop]} color={color} lineWidth={0.5} opacity={0.3} transparent />;
+      })}
+    </group>
+  );
+};
+
 interface RadarDisplay3DProps {
   layers: any;
   activeProcedures: any;
@@ -587,7 +753,6 @@ const RadarDisplay3D: React.FC<RadarDisplay3DProps> = ({ layers, activeProcedure
     // 1. 重複を避けるため、正規化された高度のリストを作成
     const complexAltValues = MVA_COMPLEX_SECTORS.map(s => getNormalizedAlt(s.alt));
     
-    // 正規化された数値でフィルタリングすることで、"25" と "2500" の混在などによる重複を防ぐ
     const filteredLabels = MVA_LABELS.filter(l => !complexAltValues.includes(getNormalizedAlt(l.alt)));
     
     const standard = computeMVASectors(MVA_RINGS, MVA_MANUAL_RADIALS, MVA_MANUAL_ARCS, filteredLabels);
@@ -596,7 +761,7 @@ const RadarDisplay3D: React.FC<RadarDisplay3DProps> = ({ layers, activeProcedure
       id: `STD-${s.alt}-${idx}`,
       alt: s.alt,
       centerId: 'ARP',
-      label: s.label, // 元のラベル位置を継承
+      label: s.label,
       path: s.isFull 
         ? [
             { type: 'arc', r: s.r2, start: 0, end: 180 },
@@ -612,7 +777,7 @@ const RadarDisplay3D: React.FC<RadarDisplay3DProps> = ({ layers, activeProcedure
 
     // 2. カスタムセクタ（複雑な形状）と統合
     return [...convertedStandard, ...MVA_COMPLEX_SECTORS];
-  }, [layers.mva]); // computeMVASectors is stable, but adding it won't hurt
+  }, [layers.mva]);
 
   const getPos3D = useCallback((tgt: any) => {
     const id = typeof tgt === 'string' ? tgt : (tgt && tgt.id);
@@ -656,9 +821,10 @@ const RadarDisplay3D: React.FC<RadarDisplay3DProps> = ({ layers, activeProcedure
         <pointLight position={[10, 10, 10]} />
         
         <CoordinateGrid />
+        {/* Terrain */}        {layers.terrain && <TerrainComponent isVisible={layers.terrain} verticalScale={verticalScale} />}
 
-        {/* Terrain */}
-        {layers.terrain && <TerrainComponent isVisible={layers.terrain} verticalScale={verticalScale} />}
+        {/* ACA Boundary */}
+        {layers.aca && <ACABoundary3D altScale={altScale} />}
 
         {/* MVA Grid, Sectors & Labels */}
         {layers.mva && (
@@ -682,18 +848,22 @@ const RadarDisplay3D: React.FC<RadarDisplay3DProps> = ({ layers, activeProcedure
         ))}
 
         {/* Fixes */}
-        {layers.fixes && FIXES
-          .map(fix => (
-            <MapPoint key={fix.id} lat={fix.lat} lon={fix.lon} color="#64748b" label={fix.id} altScale={altScale} />
-          ))}
+        {layers.fixes && FIXES.map(fix => (
+          <MapPoint key={fix.id} lat={fix.lat} lon={fix.lon} color="#64748b" label={fix.id} altScale={altScale} />
+        ))}
 
         {/* Routes */}
-        {layers.airways && AIRWAYS.map((r, idx) => 
+        {layers.airways && AIRWAYS.map((r) => 
           <Route3D key={r.id} route={r} getPos={getPos3D} altScale={altScale} />)}
-        {layers.rnav && RNAV_ROUTES.map((r, idx) => 
+        {layers.rnav && RNAV_ROUTES.map((r) => 
           <Route3D key={r.id} route={r} getPos={getPos3D} altScale={altScale} />)}
-        {layers.direct && DIRECT_ROUTES.map((r, idx) => 
+        {layers.direct && DIRECT_ROUTES.map((r) => 
           <Route3D key={r.id} route={r} getPos={getPos3D} altScale={altScale} />)}
+
+        {/* Airway Protection Layer */}
+        {layers.airwayProtection && AIRWAYS.map((r) => (
+          <AirwayProtectedArea key={`prot-${r.id}`} route={r} getPos={getPos3D} altScale={altScale} />
+        ))}
 
         {/* Procedures Rendering */}
         {Object.keys(activeProcedures).map(pid => {
@@ -718,7 +888,6 @@ const RadarDisplay3D: React.FC<RadarDisplay3DProps> = ({ layers, activeProcedure
           );
         })}
 
-        {/* Info Label */}
         <Text position={[-45, 0, 45]} fontSize={1} color="#475569" rotation={[-Math.PI/2, 0, 0]}>
           3D SECTOR VIEW v92.8
         </Text>

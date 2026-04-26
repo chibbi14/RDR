@@ -6,13 +6,20 @@ import {
   PROCEDURES, RUNWAYS, AIRWAYS, DIRECT_ROUTES, RNAV_ROUTES
 } from './navigationData';
 import RadarDisplay3D from './RadarDisplay3D.tsx';
-import { MapPin, Radio, Triangle, Eye, EyeOff, Box, Move3d, Layers, Menu, X, ChevronLeft } from 'lucide-react';
+import { MapPin, Radio, Triangle, Eye, EyeOff, Box, Move3d, Layers, Menu, X, ChevronDown, ChevronRight, Settings, ShieldAlert, Navigation } from 'lucide-react';
 
 const RadarDisplay = () => {
   const [zoom, setZoom] = useState(1.0);
   const [is3D, setIs3D] = useState(true);
   const [verticalScale, setVerticalScale] = useState(1.0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({
+    settings: false,
+    nav: false,
+    safety: false,
+    rjohProc: false,
+    rjocProc: false
+  });
   const touchStartX = useRef<number | null>(null);
 
   const [layers, setLayers] = useState({ 
@@ -25,16 +32,15 @@ const RadarDisplay = () => {
     direct: false,
     rnav: false,
     mva3d: true,
-    terrain: true // Layersの方に定義を移動
+    terrain: true,
+    airwayProtection: false
   });
-  const [activeProcedures, setActiveProcedures] = useState({ 
-    'INABA_25': true,
-    'DOZEN_25_OC': true,
-    'USAGI DEP': true,
-    'ILS Z': true,
-    'RNP Y': true
-  });
+  const [activeProcedures, setActiveProcedures] = useState<Record<string, boolean>>({});
   const center = { x: 400, y: 400 };
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   const COLORS = {
     RJOH_SID: '#22d3ee',
@@ -117,89 +123,161 @@ const RadarDisplay = () => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {/* Mode Switch & Zoom */}
-          <section className="space-y-3">
-            <button 
-              onClick={() => setIs3D(!is3D)}
-              className={`w-full flex items-center justify-center gap-2 py-2 rounded border text-xs font-bold transition-all ${
-                is3D ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-700 border-slate-500 text-slate-300'
-              }`}
-            >
-              {is3D ? <Move3d size={14} /> : <Box size={14} />}
-              {is3D ? '3D MODE ON' : 'SWITCH TO 3D'}
+        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+          {/* 1. Display Settings */}
+          <section className="border-b border-slate-700 pb-2">
+            <button onClick={() => toggleSection('settings')} className="w-full flex items-center justify-between p-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <span className="flex items-center gap-2"><Settings size={12} /> Display Settings</span>
+              {expandedSections.settings ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
+            
+            {expandedSections.settings && (
+              <div className="px-2 space-y-3 pt-2 pb-1">
+                <button 
+                  onClick={() => setIs3D(!is3D)}
+                  className={`w-full flex items-center justify-center gap-2 py-2 rounded border text-[10px] font-bold transition-all ${
+                    is3D ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-700 border-slate-500 text-slate-300'
+                  }`}
+                >
+                  {is3D ? <Move3d size={14} /> : <Box size={14} />}
+                  {is3D ? '3D MODE ON' : 'SWITCH TO 3D'}
+                </button>
 
-            <div className="text-white text-xs">
-              <div className="flex justify-between mb-1">
-                <span>Zoom</span>
-                <span>{zoom.toFixed(1)}x</span>
-              </div>
-              <input 
-                type="range" min="0.1" max="5" step="0.1" value={zoom} 
-                onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-              />
-            </div>
-
-            {is3D && (
-              <div className="p-2 bg-slate-700/50 rounded border border-slate-600">
-                <div className="text-[10px] text-slate-300 flex justify-between mb-1">
-                  <span>Vertical Scale</span>
-                  <span>{verticalScale.toFixed(1)}x</span>
+                <div className="text-white text-[10px]">
+                  <div className="flex justify-between mb-1">
+                    <span>Map Zoom</span>
+                    <span>{zoom.toFixed(1)}x</span>
+                  </div>
+                  <input 
+                    type="range" min="0.1" max="5" step="0.1" value={zoom} 
+                    onChange={(e) => setZoom(parseFloat(e.target.value))}
+                    className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                  />
                 </div>
-                <input 
-                  type="range" min="0.1" max="5" step="0.1" value={verticalScale} 
-                  onChange={(e) => setVerticalScale(parseFloat(e.target.value))}
-                  className="w-full h-1 bg-indigo-900 rounded-lg appearance-none cursor-pointer accent-indigo-400"
-                />
+
+                {is3D && (
+                  <div className="p-2 bg-slate-700/50 rounded border border-slate-600">
+                    <div className="text-[10px] text-slate-300 flex justify-between mb-1">
+                      <span>Vertical Alt Scale</span>
+                      <span>{verticalScale.toFixed(1)}x</span>
+                    </div>
+                    <input 
+                      type="range" min="0.1" max="5" step="0.1" value={verticalScale} 
+                      onChange={(e) => setVerticalScale(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-indigo-900 rounded-lg appearance-none cursor-pointer accent-indigo-400"
+                    />
+                  </div>
+                )}
               </div>
             )}
           </section>
 
-          {/* Layer Visibility */}
-          <section className="flex flex-col gap-2">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Layers</p>
-            {[
-              { id: 'aca', label: 'ACA Boundary', color: 'text-yellow-400' },
-              { id: 'mva', label: 'MVA Sectors', color: 'text-cyan-400' },
-              { id: 'vor', label: 'VOR / DME', color: 'text-sky-400' },
-              { id: 'fixes', label: 'Waypoints (FIX)', color: 'text-slate-400' },
-              { id: 'runways', label: 'Runways', color: 'text-white' },
-              { id: 'airways', label: 'Airways', color: 'text-slate-500' },
-              { id: 'rnav', label: 'RNAV Routes', color: 'text-indigo-400' },
-              { id: 'mva3d', label: 'MVA 3D Planes', color: 'text-cyan-200' },
-              { id: 'direct', label: 'Direct Routes', color: 'text-emerald-500' },
-              { id: 'terrain', label: 'Terrain', color: 'text-green-400' },
-            ].map(layer => (
-              <label key={layer.id} className={`flex items-center gap-3 cursor-pointer text-[11px] ${layer.color} hover:bg-slate-700/50 p-1 rounded transition-colors`}>
-                <input 
-                  type="checkbox" 
-                  className="w-3 h-3 rounded bg-slate-900 border-slate-600 text-cyan-600 focus:ring-0 focus:ring-offset-0"
-                  checked={!!layers[layer.id]} // undefined対策として論理値に変換
-                  onChange={() => setLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))} 
-                />
-                {layer.label}
-              </label>
-            ))}
+          {/* 2. Navigation Layers */}
+          <section className="border-b border-slate-700 pb-2">
+            <button onClick={() => toggleSection('nav')} className="w-full flex items-center justify-between p-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <span className="flex items-center gap-2"><Navigation size={12} /> Nav Elements</span>
+              {expandedSections.nav ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            
+            {expandedSections.nav && (
+              <div className="px-2 pt-1 flex flex-col gap-1">
+                {[
+                  { id: 'vor', label: 'VOR / DME', color: 'text-sky-400' },
+                  { id: 'fixes', label: 'Waypoints (FIX)', color: 'text-slate-400' },
+                  { id: 'runways', label: 'Runways', color: 'text-white' },
+                  { id: 'airways', label: 'Airways', color: 'text-slate-500' },
+                  { id: 'rnav', label: 'RNAV Routes', color: 'text-indigo-400' },
+                  { id: 'direct', label: 'Direct Routes', color: 'text-emerald-500' },
+                ].map(layer => (
+                  <label key={layer.id} className={`flex items-center gap-3 cursor-pointer text-[11px] ${layer.color} hover:bg-slate-700/50 p-1 px-2 rounded transition-colors`}>
+                    <input 
+                      type="checkbox" 
+                      className="w-3 h-3 rounded bg-slate-900 border-slate-600 text-cyan-600 focus:ring-0 focus:ring-offset-0"
+                      checked={!!layers[layer.id]}
+                      onChange={() => setLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))} 
+                    />
+                    {layer.label}
+                  </label>
+                ))}
+              </div>
+            )}
           </section>
 
-          {/* Procedures */}
-          <section className="flex flex-col gap-2">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 border-t border-slate-700 pt-3">Procedures</p>
-            {Object.keys(PROCEDURES).map(pid => (
-              <label key={pid} className="flex items-center gap-3 cursor-pointer text-[11px] hover:bg-slate-700/50 p-1 rounded transition-colors">
-                <input 
-                  type="checkbox" 
-                  className="w-3 h-3 rounded bg-slate-900 border-slate-600 text-emerald-600 focus:ring-0 focus:ring-offset-0"
-                  checked={!!activeProcedures[pid]} 
-                  onChange={() => setActiveProcedures(prev => ({ ...prev, [pid]: !prev[pid] }))} 
-                />
-                <span className={PROCEDURES[pid].air === 'RJOC' ? 'text-emerald-400' : 'text-cyan-400'}>{pid}</span>
-              </label>
-            ))}
+          {/* 3. Safety & Terrain */}
+          <section className="border-b border-slate-700 pb-2">
+            <button onClick={() => toggleSection('safety')} className="w-full flex items-center justify-between p-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <span className="flex items-center gap-2"><ShieldAlert size={12} /> Environment</span>
+              {expandedSections.safety ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+
+            {expandedSections.safety && (
+              <div className="px-2 pt-1 flex flex-col gap-1">
+                {[
+                  { id: 'aca', label: 'ACA Boundary', color: 'text-yellow-400' },
+                  { id: 'mva', label: 'MVA Sectors', color: 'text-cyan-400' },
+                  { id: 'mva3d', label: 'MVA 3D Planes', color: 'text-cyan-200' },
+                  { id: 'terrain', label: 'Terrain Mesh', color: 'text-green-400' },
+                ].map(layer => (
+                  <label key={layer.id} className={`flex items-center gap-3 cursor-pointer text-[11px] ${layer.color} hover:bg-slate-700/50 p-1 px-2 rounded transition-colors`}>
+                    <input 
+                      type="checkbox" 
+                      className="w-3 h-3 rounded bg-slate-900 border-slate-600 text-cyan-600 focus:ring-0 focus:ring-offset-0"
+                      checked={!!layers[layer.id]}
+                      onChange={() => setLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }))} 
+                    />
+                    {layer.label}
+                  </label>
+                ))}
+              </div>
+            )}
           </section>
-        </div>
+
+          {/* 4. RJOH Procedures */}
+          <section className="border-b border-slate-700 pb-2">
+            <button onClick={() => toggleSection('rjohProc')} className="w-full flex items-center justify-between p-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <span className="flex items-center gap-2"><Radio size={12} /> RJOH Procedures</span>
+              {expandedSections.rjohProc ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            {expandedSections.rjohProc && (
+              <div className="px-2 pt-1 space-y-1">
+                {Object.keys(PROCEDURES).filter(pid => PROCEDURES[pid].air === 'RJOH').map(pid => (
+                  <label key={pid} className="flex items-center gap-3 cursor-pointer text-[11px] hover:bg-slate-700/50 p-1 px-2 rounded transition-colors">
+                    <input 
+                      type="checkbox" 
+                      className="w-3 h-3 rounded bg-slate-900 border-slate-600 text-cyan-600 focus:ring-0 focus:ring-offset-0"
+                      checked={!!activeProcedures[pid]} 
+                      onChange={() => setActiveProcedures(prev => ({ ...prev, [pid]: !prev[pid] }))} 
+                    />
+                    <span className="text-cyan-400">{pid}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* 5. RJOC Procedures */}
+          <section className="pb-2">
+            <button onClick={() => toggleSection('rjocProc')} className="w-full flex items-center justify-between p-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <span className="flex items-center gap-2"><Radio size={12} /> RJOC Procedures</span>
+              {expandedSections.rjocProc ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            {expandedSections.rjocProc && (
+              <div className="px-2 pt-1 space-y-1">
+                {Object.keys(PROCEDURES).filter(pid => PROCEDURES[pid].air === 'RJOC').map(pid => (
+                  <label key={pid} className="flex items-center gap-3 cursor-pointer text-[11px] hover:bg-slate-700/50 p-1 px-2 rounded transition-colors">
+                    <input 
+                      type="checkbox" 
+                      className="w-3 h-3 rounded bg-slate-900 border-slate-600 text-emerald-600 focus:ring-0 focus:ring-offset-0"
+                      checked={!!activeProcedures[pid]} 
+                      onChange={() => setActiveProcedures(prev => ({ ...prev, [pid]: !prev[pid] }))} 
+                    />
+                    <span className="text-emerald-400">{pid}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </section>
+         </div>
 
         <div className="p-2 border-t border-slate-700 text-[9px] text-slate-500 text-center">
           V92.8 PROTOTYPE
@@ -209,7 +287,11 @@ const RadarDisplay = () => {
       {/* Main Display Area */}
       <div className="flex-1 relative flex flex-col h-full min-h-0 overflow-hidden">
         {is3D ? (
-          <RadarDisplay3D layers={layers} activeProcedures={activeProcedures} verticalScale={verticalScale} />
+          <RadarDisplay3D 
+            layers={layers} 
+            activeProcedures={activeProcedures} 
+            verticalScale={verticalScale} 
+          />
         ) : (
           <svg viewBox="0 0 800 800" className="w-full h-full cursor-crosshair bg-slate-900">
             {/* MVA Circles (Background Layer) */}

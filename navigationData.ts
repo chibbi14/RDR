@@ -111,6 +111,7 @@ export const FIXES = [
   { id: 'OC713', lat: dmsToDeg("354431.8"), lon: dmsToDeg("1331217.8") },
   { id: 'ENMUH', lat: 35.23122, lon: 132.75346 },
   { id: 'SUBIE', lat: 35.31737, lon: 132.69121 },
+  { id: 'DAISEN', lat: 35.37111, lon: 133.54000 }
 ];
 
 export const RUNWAYS = [
@@ -212,31 +213,35 @@ export const PROCEDURES: Record<string, Procedure> = {
   'TACAN_A': { air: 'RJOH', type: 'IAP', dash: '2, 2', routes: [{ from: 'MINAT', to: 'tIF', center: 'JET', type: 'arc', radius: 17.0, sweep: 1 }, { from: 'tIF', to: 'tFAF' }, { from: 'tFAF', to: 'RW07' }], nmAltitudes: { 0:{alt:4000}, 8:{alt:3300, limit:"3300+"}, 19:{alt:14} } },
 
   // RJOC
-  'DOZEN_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p250_4 }, { from: oc_p250_4, to: p_exit_hdg77, center: c_r2nm_d25, type: 'arc', radius: 2, sweep: 1 }, { from: p_exit_hdg77, to: p_intercept_dozen_25 }, { from: p_intercept_dozen_25, to: 'DOZEN' }] },
-  'DOZEN_07_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p070_2 }, { from: oc_p070_2, to: p_intercept_dozen_07 }, { from: p_intercept_dozen_07, to: 'DOZEN' }] },
-  'MATSUE_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p253_m25 }, { from: oc_p253_m25, to: p_m25_exit, center: c_r2nm_m25, type: 'arc', radius: 2.0, sweep: 1, largeArc: 1 }, { from: p_m25_exit, to: 'OC511' }, { from: 'OC511', to: 'MIHOU' }, { from: 'MIHOU', to: 'KAIKE' }, { from: 'KAIKE', to: 'TSUNO' }] },
-  'MATSUE_07_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: calcRelativeLatLon(RJOC_ARP.lat, RJOC_ARP.lon, 70, 2) }, { from: calcRelativeLatLon(RJOC_ARP.lat, RJOC_ARP.lon, 70, 2), to: 'OC511' }, { from: 'OC511', to: 'MIHOU' }, { from: 'MIHOU', to: 'KAIKE' }, { from: 'KAIKE', to: 'TSUNO' }] },
-  'TAKHI_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p250_4 }, { from: oc_p250_4, to: p_r2nm_hdg30, center: c_r2nm_d25, type: 'arc', radius: 2, sweep: 1 }, { from: p_r2nm_hdg30, to: 'OC711' }, { from: 'OC711', to: 'TAKHI' }] },
-  'TAKHI_07_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p073_2 }, { from: oc_p073_2, to: 'OC711' }, { from: 'OC711', to: 'TAKHI' }] },
-  'SAIGO_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p250_4 }, { from: oc_p250_4, to: p_r2nm_hdg30, center: c_r2nm_d25, type: 'arc', radius: 2, sweep: 1 }, { from: p_r2nm_hdg30, to: 'OC713' }, { from: 'OC713', to: 'SAIGO' }] },
-  'SAIGO_07_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p073_2 }, { from: oc_p073_2, to: 'OC712' }, { from: 'OC712', to: 'OC713' }, { from: 'OC713', to: 'SAIGO' }] },
+  'DOZEN_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p250_4 }, { from: oc_p250_4, to: p_exit_hdg77, center: c_r2nm_d25, type: 'arc', radius: 2, sweep: 1 }, { from: p_exit_hdg77, to: p_intercept_dozen_25 }, { from: p_intercept_dozen_25, to: 'DOZEN' }] , nmAltitudes: { 0:{alt:0}, 15:{alt:6500}}},
+  'DOZEN_07_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p070_2 }, { from: oc_p070_2, to: p_intercept_dozen_07 }, { from: p_intercept_dozen_07, to: 'DOZEN' }] , nmAltitudes: { 0:{alt:0}, 10:{alt:6500}}},
+  'MATSUE_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p253_m25 }, { from: oc_p253_m25, to: p_m25_exit, center: c_r2nm_m25, type: 'arc', radius: 2.0, sweep: 1, largeArc: 1 }, { from: p_m25_exit, to: 'OC511' }, { from: 'OC511', to: 'MIHOU' }, { from: 'MIHOU', to: 'KAIKE' }, { from: 'KAIKE', to: 'TSUNO' }], nmAltitudes: {0:{alt:0}, 8:{alt:2000, limit:"1700+"}, 28:{alt:9000}, 32:{alt:13000, limit:"3500+"},  100:{alt:29000, limit:"10000+"}, } },
+  'MATSUE_07_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: calcRelativeLatLon(RJOC_ARP.lat, RJOC_ARP.lon, 70, 2) }, { from: calcRelativeLatLon(RJOC_ARP.lat, RJOC_ARP.lon, 70, 2), to: 'OC511' }, { from: 'OC511', to: 'MIHOU' }, { from: 'MIHOU', to: 'KAIKE' }, { from: 'KAIKE', to: 'TSUNO' }], nmAltitudes: {0:{alt:0}, 14:{alt:9400, limit:"3500+"},   78:{alt:29000, limit:"10000+"}, } },
+  'TAKHI_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p250_4 }, { from: oc_p250_4, to: p_r2nm_hdg30, center: c_r2nm_d25, type: 'arc', radius: 2, sweep: 1 }, { from: p_r2nm_hdg30, to: 'OC711' }, { from: 'OC711', to: 'TAKHI' }] , nmAltitudes: { 0:{alt:0}, 15:{alt:6500}}},
+  'TAKHI_07_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p073_2 }, { from: oc_p073_2, to: 'OC711' }, { from: 'OC711', to: 'TAKHI' }] , nmAltitudes: { 0:{alt:0}, 15:{alt:6500}}},
+  'SAIGO_25_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p250_4 }, { from: oc_p250_4, to: p_r2nm_hdg30, center: c_r2nm_d25, type: 'arc', radius: 2, sweep: 1 }, { from: p_r2nm_hdg30, to: 'OC713' }, { from: 'OC713', to: 'SAIGO' }], nmAltitudes: { 0:{alt:0}, 15:{alt:6500}} },
+  'SAIGO_07_OC': { air: 'RJOC', type: 'SID', dash: '10, 5', routes: [{ from: RJOC_ARP, to: oc_p073_2 }, { from: oc_p073_2, to: 'OC712' }, { from: 'OC712', to: 'OC713' }, { from: 'OC713', to: 'SAIGO' }] , nmAltitudes: { 0:{alt:0}, 15:{alt:6500}}},
 
   // RJOC STAR
-  'SUSAR_STAR': { air: 'RJOC', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA', to: 'AMAKO' }, { from: 'AMAKO', to: 'SUSAR' }] },
-  'OKUNI_STAR': { air: 'RJOC', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA', to: 'YOKAI' }, { from: 'YOKAI', to: 'WATCH' }, { from: 'WATCH', to: 'OKUNI' }] },
-  'NAKAU_STAR': { air: 'RJOC', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA', to: 'NAKAU' }] },
+  'SUSAR_STAR': { air: 'RJOC', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA', to: 'AMAKO' }, { from: 'AMAKO', to: 'SUSAR' }], nmAltitudes: { 0:{alt:13500}, 25:{alt:11000, limit:"9000+"}, 50:{alt:5000, limit:"4300+"} }  },
+  'OKUNI_STAR': { air: 'RJOC', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA', to: 'YOKAI' }, { from: 'YOKAI', to: 'WATCH' }, { from: 'WATCH', to: 'OKUNI' }] , nmAltitudes: { 0:{alt:13000},  24:{alt:8000, limit:"7000+"}, 63:{alt:4000, limit:"4000+"}}},
+  'NAKAU_STAR': { air: 'RJOC', type: 'STAR', dash: '5, 3', routes: [{ from: 'RAKDA', to: 'NAKAU' }] , nmAltitudes: { 0:{alt:10000},  28:{alt:4000, limit:"4000+"} } },
 
   // RJOC IAP
-  'RNP07_SUSAR': { air: 'RJOC', type: 'IAP', dash: '2, 2', routes: [{ from: 'SUSAR', to: 'ENMUH' }, { from: 'ENMUH', to: 'SUBIE' }, { from: 'SUBIE', to: RJOC_ARP }] },
-  'RNP07_OKUNI': { air: 'RJOC', type: 'IAP', dash: '2, 2', routes: [{ from: 'OKUNI', to: 'SUBIE' }, { from: 'SUBIE', to: RJOC_ARP }] },
-  'RNP25': { air: 'RJOC', type: 'IAP', dash: '2, 2', routes: [{ from: 'NAKAU', to: RJOC_ARP }] }
+  'RNP07_SUSAR': { air: 'RJOC', type: 'IAP', dash: '2, 2', routes: [{ from: 'SUSAR', to: 'ENMUH' }, { from: 'ENMUH', to: 'SUBIE' }, { from: 'SUBIE', to: RJOC_ARP }], nmAltitudes: { 0:{alt:5000,limit:"4300+"}, 12:{alt:2400} , 25:{alt:0} } },
+  'RNP07_OKUNI': { air: 'RJOC', type: 'IAP', dash: '2, 2', routes: [{ from: 'OKUNI', to: 'SUBIE' }, { from: 'SUBIE', to: RJOC_ARP }] , nmAltitudes: { 0:{alt:4000, limit:"4000+"},  6:{alt:2400}, 19:{alt:0}}},
+  'RNP25': { air: 'RJOC', type: 'IAP', dash: '2, 2', routes: [{ from: 'NAKAU', to: RJOC_ARP }], nmAltitudes: { 0:{alt:4000, limit:"4000+"},  18:{alt:0} } }
 };
+
+// 磁気偏差（8度西偏 = 反時計回りに8度回転）
+const MAG_VAR = -8;
+const rot = (d: number) => (d + MAG_VAR + 360) % 360;
 
 export const MVA_RINGS = [3, 7, 9, 10, 13, 15, 18, 25, 30, 35, 40, 50];
 
 export const ACA_POINTS_NM = { 1:{x:23.85,y:-7.45}, 2:{x:-9.3,y:-23.2}, 3:{x:13.5,y:-5.6}, 4:{x:-7.2,y:-17.7}, 5:{x:24.8,y:6.3}, 6:{x:-26.25,y:21.5}, 7:{x:-15.1,y:-30.4}, 8:{x:-1.9,y:6.6}, 9:{x:22.3,y:13.2}, 10:{x:14.8,y:31.5}, 11:{x:28.8,y:19.1}, 12:{x:-8.5,y:33.3} };
 
-export const MVA_MANUAL_ARCS = [ 
+const RAW_MVA_MANUAL_ARCS = [ 
   {r:3,start:250,end:335},{r:3,start:125,end:250},{r:10,start:335,end:35},{r:15,start:290,end:50},
   {r:25,start:110,end:50},{r:25,start:335,end:360},{r:25,start:290,end:335},{r:25,start:145,end:335},
   {r:35,start:360,end:35},{r:40,start:35,end:360},{r:40,start:145,end:360},{r:50,start:0,end:360,isFull:true},
@@ -246,7 +251,13 @@ export const MVA_MANUAL_ARCS = [
   {r:18,start:205,end:210} 
 ];
 
-export const MVA_MANUAL_RADIALS = [ 
+export const MVA_MANUAL_ARCS = RAW_MVA_MANUAL_ARCS.map(a => ({
+  ...a,
+  start: a.start !== undefined ? rot(a.start) : undefined,
+  end: a.end !== undefined ? rot(a.end) : undefined
+}));
+
+const RAW_MVA_MANUAL_RADIALS = [ 
   {deg:360,r1:35,r2:40},{deg:20,r1:25,r2:35},{deg:35,r1:10,r2:50},{deg:50,r1:0,r2:50},
   {deg:87,r1:7,r2:40},{deg:100,r1:9,r2:13},{deg:100,r1:13,r2:50},{deg:110,r1:13,r2:50},
   {deg:145,r1:13,r2:50},{deg:210,r1:9,r2:13},{deg:242,r1:9,r2:18},{deg:268,r1:3,r2:18},
@@ -254,7 +265,12 @@ export const MVA_MANUAL_RADIALS = [
   {deg:290,r1:15,r2:18},{deg:335,r1:3,r2:40},{deg:125,r1:3,r2:9},{deg:250,r1:0,r2:3} 
 ];
 
-export const MVA_LABELS = [ 
+export const MVA_MANUAL_RADIALS = RAW_MVA_MANUAL_RADIALS.map(r => ({
+  ...r,
+  deg: rot(r.deg)
+}));
+
+const RAW_MVA_LABELS = [ 
   {alt:"25",label:{deg:5,r:5}},{alt:"40",label:{deg:5,r:12.5}},{alt:"50",label:{deg:5,r:20}},{alt:"90",label:{deg:355,r:32.5}},
   {alt:"110",label:{deg:0,r:45}},{alt:"40",label:{deg:42.5,r:32.5}},{alt:"60",label:{deg:27,r:30}},{alt:"30",label:{deg:42,r:20}},
   {alt:"50",label:{deg:42,r:45}},{alt:"15",label:{deg:70,r:12}},{alt:"20",label:{deg:68,r:35}},{alt:"30",label:{deg:105,r:8}},
@@ -263,6 +279,11 @@ export const MVA_LABELS = [
   {alt:"80",label:{deg:127,r:19}},{alt:"100",label:{deg:127,r:27.5}},{alt:"130",label:{deg:127,r:35}},{alt:"160",label:{deg:127,r:45}},
   {alt:"70",label:{deg:240,r:32.5}},{alt:"30",label:{deg:305,r:10}} 
 ];
+
+export const MVA_LABELS = RAW_MVA_LABELS.map(l => ({
+  ...l,
+  label: { ...l.label, deg: rot(l.label.deg) }
+}));
 
 export type PathSegment = 
   | { type: 'line'; r: number; deg: number }
@@ -276,8 +297,7 @@ export interface MVAComplexSector {
   label?: { deg: number; r: number };
 }
 
-// 基準点がARP（Yonago）ではない、または複雑な多角形で構成されるMVAセクタ (RJOC基準は削除)
-export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
+const RAW_MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
   {
     id: "CS-001",
     alt: "25",
@@ -586,6 +606,17 @@ export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = [
     ]
   }
 ];
+
+export const MVA_COMPLEX_SECTORS: MVAComplexSector[] = RAW_MVA_COMPLEX_SECTORS.map(s => ({
+  ...s,
+  path: s.path.map(p => {
+    if (p.type === 'line') return { ...p, deg: rot(p.deg) };
+    if (p.type === 'arc') return { ...p, start: rot(p.start), end: rot(p.end) };
+    return p;
+  }),
+  label: s.label ? { ...s.label, deg: rot(s.label.deg) } : undefined
+}));
+
 
 export const AIRWAYS = [
   { 
