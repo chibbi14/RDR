@@ -65,6 +65,10 @@ export const FOGEL = { id: 'FOGEL', lat: dmsToDeg("360626"), lon: dmsToDeg("1315
 export const AKANA = { id: 'AKANA', lat: dmsToDeg("345748.47"), lon: dmsToDeg("1324904.75") };
 export const KIJJY = { id: 'KIJJY', lat: dmsToDeg("350901.80"), lon: dmsToDeg("1340554.93") };
 
+// YUMII: GAINA-RJOHを結ぶ線上の、RJOH側から6.1NMの位置。
+// RJOHからGAINAへの方位は約064度。
+export const YUMII = { id: 'YUMII', ...calcRelativeLatLon(ARP.lat, ARP.lon, 64, 6.1) };
+
 // Airways Points
 export const LANAT = { id: 'LANAT', lat: dmsToDeg("362224"), lon: dmsToDeg("1312542") };
 export const DANJU = { id: 'DANJU', lat: dmsToDeg("353733.90"), lon: dmsToDeg("1323440.85") };
@@ -78,7 +82,7 @@ export const IGRAS = { id: 'IGRAS', lat: dmsToDeg("371845.35"), lon: dmsToDeg("1
 
 export const FIXES = [
   INABA, NIIMI, DOZEN, MIYOS, TOZAN, STAGE, OH501, OH701, OH703, YAPPA, GAINA, KYURI, RAKDA_H, FAF18, OH561, OH762, OH761, OH763, PEPOS, DAIEI,
-  LANAT, DANJU, TRE, KANNA, HGE, KYOKA, OIE, SAPRA, IGRAS,
+  LANAT, DANJU, TRE, KANNA, HGE, KYOKA, OIE, SAPRA, IGRAS, YUMII,
   YUBAR, IWT, SAMBA, OSPEL, VIBEL, LATOR, DULOK, ADLEB, ORUDA, SAKYU, LEPGU, YAKMO, OPERA, ENRUN, KALEK, TAREB, SOUJA, SAEKI, TONBI, CARPS, RUTGO, ATPOD, KABKI, FOGEL,
   AKANA, KIJJY,
   { id: 'MINAT', ...calcRelativeLatLon(35.53111, 133.09417, 81, 17.0) },
@@ -91,8 +95,8 @@ export const FIXES = [
   { id: 'RW07', lat: 35.48843, lon: 133.22683 },
   { id: 'RW25', lat: 35.49843, lon: 133.25083 },
   { id: 'IF25', ...calcRelativeLatLon(IYV_LAT, IYV_LON, 73, 21.8) },
-  { id: 'ATMIK', ...calcRelativeLatLon(IYV_LAT, IYV_LON, 111, 21.8) },
-  { id: 'SEKKY', ...calcRelativeLatLon(IYV_LAT, IYV_LON, 48, 15.9) },
+  { id: 'ATMIK', ...calcRelativeLatLon(IYV_LAT, IYV_LON, 111, 19.8) },
+  { id: 'SEKKY', ...calcRelativeLatLon(IYV_LAT, IYV_LON, 48, 21.9) },
   { id: 'MIHOU', lat: 35.5311, lon: 133.0939 },
   { id: 'KAIKE', lat: 35.4958, lon: 133.2870 },
   { id: 'RAKDA', lat: 35.5195, lon: 133.6401 },

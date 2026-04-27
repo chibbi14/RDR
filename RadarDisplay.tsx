@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { latLonToCanvas, NM_TO_PX } from './geoUtils';
+import React, { useState, useRef, useEffect } from 'react';
+import { latLonToCanvas, NM_TO_PX, calcRelativeLatLon } from './geoUtils';
 import { 
   AIRPORTS, VOR_DME, FIXES, MVA_RINGS, 
   ACA_POINTS_NM, MVA_MANUAL_ARCS, MVA_MANUAL_RADIALS, MVA_LABELS,
@@ -8,38 +8,241 @@ import {
 import RadarDisplay3D from './RadarDisplay3D.tsx';
 import { MapPin, Radio, Triangle, Eye, EyeOff, Box, Move3d, Layers, Menu, X, ChevronDown, ChevronRight, Settings, ShieldAlert, Navigation } from 'lucide-react';
 
+type NavMode = 'PROC' | 'VECTOR' | 'DIRECT';
+
+interface AircraftState {
+  id: string;
+  callsign: string;
+  mode: NavMode;
+  pos: { lat: number; lon: number; alt: number };
+  vector: { hdg: number; gs: number };
+  isStarAuthorized: boolean;
+  isApproachCleared: boolean;
+  flightPlan: string[];
+  targetFix: string | null;
+  inductionTarget: string | null;
+  targetAlt: number;
+  targetHdg: number;
+  tagOffset: { x: number; y: number };
+  // 管制ストリップ用追加データ
+  aircraftType: string;
+  squawk: string;
+  departureDestination: string;
+  commStart: string;
+  commEnd: string;
+  identTime: string;
+}
+
+// 航法計算用ユーティリティ
+const calculateBearing = (start: { lat: number; lon: number }, end: { lat: number; lon: number }) => {
+  const y = Math.sin((end.lon - start.lon) * Math.PI / 180) * Math.cos(end.lat * Math.PI / 180);
+  const x = Math.cos(start.lat * Math.PI / 180) * Math.sin(end.lat * Math.PI / 180) -
+            Math.sin(start.lat * Math.PI / 180) * Math.cos(end.lat * Math.PI / 180) * Math.cos((end.lon - start.lon) * Math.PI / 180);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+};
+
+const calculateDistance = (p1: { lat: number; lon: number }, p2: { lat: number; lon: number }) => {
+  const dLat = (p2.lat - p1.lat) * 60;
+  const dLon = (p2.lon - p1.lon) * 60 * Math.cos(p1.lat * Math.PI / 180);
+  return Math.sqrt(dLat * dLat + dLon * dLon);
+};
+
 const RadarDisplay = () => {
   const [zoom, setZoom] = useState(1.0);
-  const [is3D, setIs3D] = useState(true);
+  const [is3D, setIs3D] = useState(false);
   const [verticalScale, setVerticalScale] = useState(1.0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [selectedAircraftId, setSelectedAircraftId] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState({
     settings: false,
     nav: false,
     safety: false,
     rjohProc: false,
-    rjocProc: false
+    rjocProc: false,
   });
   const touchStartX = useRef<number | null>(null);
 
   const [layers, setLayers] = useState({ 
     aca: true, 
     mva: true, 
-    fixes: true, 
+    fixes: false, 
     vor: true, 
-    runways: true,
+    runways: false,
     airways: false,
     direct: false,
     rnav: false,
-    mva3d: true,
-    terrain: true,
+    mva3d: false,
+    terrain: false,
     airwayProtection: false
   });
+
+  const [aircrafts, setAircrafts] = useState<AircraftState[]>([
+    {
+      id: 'ac1',
+      callsign: 'JAL123',
+      mode: 'PROC',
+      // RAKDA (35.5195, 133.6401) の 5NM 東
+      pos: { lat: 35.5195, lon: 133.742, alt: 3500 },
+      vector: { hdg: 250, gs: 210 },
+      isStarAuthorized: false,
+      isApproachCleared: false,
+      flightPlan: ['RAKDA', 'GAINA', 'YUMII', 'RJOH'],
+      targetFix: 'RAKDA',
+      inductionTarget: 'RAKDA',
+      targetAlt: 10000,
+      targetHdg: 250,
+      tagOffset: { x: 30, y: -30 },
+      aircraftType: 'B772',
+      squawk: '1200',
+      departureDestination: 'RJTT/RJOH',
+      commStart: '0820',
+      commEnd: '0930',
+      identTime: '0825'
+    },
+    {
+      id: 'ac2',
+      callsign: 'ANA456',
+      mode: 'PROC',
+      // RAKDA (35.5195, 133.6401) の 5NM 東
+      pos: { lat: 35.5195, lon: 133.742, alt: 8000 },
+      vector: { hdg: 70, gs: 180 },
+      isStarAuthorized: false,
+      isApproachCleared: false,
+      flightPlan: ['RAKDA', 'NAKAU', 'RJOC'],
+      targetFix: 'RAKDA',
+      inductionTarget: 'RAKDA',
+      targetAlt: 4000,
+      targetHdg: 70,
+      tagOffset: { x: 30, y: 30 },
+      aircraftType: 'A321',
+      squawk: '5678',
+      departureDestination: 'RJBB/RJOH',
+      commStart: '0845',
+      commEnd: '1000',
+      identTime: '0850'
+    }
+  ]);
+
   const [activeProcedures, setActiveProcedures] = useState<Record<string, boolean>>({});
   const center = { x: 400, y: 400 };
 
+  // Physics loop (1 second update)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAircrafts(prev => prev.map(ac => {
+        let newTargetHdg = ac.targetHdg;
+        let newTargetFix = ac.targetFix;
+        let newMode = ac.mode;
+
+        // 1. Navigation Mode Logic (DIRECT / PROC)
+        if ((ac.mode === 'DIRECT' || ac.mode === 'PROC') && ac.targetFix) {
+          const fixPos = getLatLonById(ac.targetFix);
+          if (fixPos) {
+            // 目標地点への方位を計算
+            newTargetHdg = calculateBearing(ac.pos, fixPos);
+            
+            // 到達判定 (0.5NM 以内)
+            const dist = calculateDistance(ac.pos, fixPos);
+            if (dist < 0.5) {
+              if (ac.mode === 'PROC') {
+                const currentIndex = ac.flightPlan.indexOf(ac.targetFix);
+                if (currentIndex !== -1 && currentIndex < ac.flightPlan.length - 1) {
+                  // 次の Fix へ
+                  newTargetFix = ac.flightPlan[currentIndex + 1];
+                } else {
+                  // 経路終了 -> VECTORモードで現在方位維持
+                  newMode = 'VECTOR';
+                  newTargetFix = null;
+                }
+              } else {
+                // DIRECT モード終了
+                newMode = 'VECTOR';
+                newTargetFix = null;
+              }
+            }
+          }
+        }
+
+        // 2. Heading logic (3deg/s turn rate)
+        let currentHdg = ac.vector.hdg;
+        if (Math.abs(currentHdg - newTargetHdg) > 0.1) {
+          let diff = (newTargetHdg - currentHdg + 360) % 360;
+          if (diff > 180) diff -= 360;
+          const turn = Math.sign(diff) * Math.min(Math.abs(diff), 3);
+          currentHdg = (currentHdg + turn + 360) % 360;
+        }
+        // 3. Altitude logic (2000ft/min = 33ft/s)
+        const climbRate = 2000 / 60;
+        const nextAlt = Math.abs(ac.targetAlt - ac.pos.alt) > climbRate 
+          ? ac.pos.alt + Math.sign(ac.targetAlt - ac.pos.alt) * climbRate 
+          : ac.targetAlt;
+        // 4. Forward Movement
+        const dist = ac.vector.gs / 3600; // NM per sec
+        const nextPos = calcRelativeLatLon(ac.pos.lat, ac.pos.lon, currentHdg, dist);
+        return { 
+          ...ac, 
+          mode: newMode,
+          targetFix: newTargetFix,
+          targetHdg: newTargetHdg,
+          pos: { ...nextPos, alt: nextAlt }, 
+          vector: { ...ac.vector, hdg: currentHdg } 
+        };
+      }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const updateAircraftTarget = (id: string, updates: Partial<AircraftState>) => {
+    setAircrafts(prev => prev.map(ac => {
+      if (ac.id === id) {
+        // 方位を手動で変更（Vector開始）した場合は VECTOR モードへ移行
+        let newMode = updates.targetHdg !== undefined ? 'VECTOR' : (updates.mode || ac.mode);
+        return { ...ac, ...updates, mode: newMode };
+      }
+      return ac;
+    }));
+  };
+
+  // Resume Own Navigation: VECTORモードを終了し、誘導目標へ向かう
+  const handleResumeOwnNavigation = (ac: AircraftState) => {
+    if (ac.mode !== 'VECTOR' || !ac.inductionTarget) return;
+    
+    const isInPlan = ac.flightPlan.includes(ac.inductionTarget);
+    updateAircraftTarget(ac.id, {
+      targetFix: ac.inductionTarget,
+      mode: isInPlan ? 'PROC' : 'DIRECT'
+    });
+  };
+
+  // Recleared Direct: 飛行計画内の特定のFIXへ直行し、以降の経路を維持
+  const handleReclearedDirect = (ac: AircraftState, fixId: string) => {
+    const currentIndex = ac.flightPlan.indexOf(fixId);
+    let newPlan = [...ac.flightPlan];
+    
+    if (currentIndex !== -1) {
+      // 指定されたFIXより前の経路をスキップ
+      newPlan = ac.flightPlan.slice(currentIndex);
+    } else {
+      // 計画外のFIXの場合は、それを先頭に追加（DIRECTモード相当）
+      newPlan = [fixId];
+    }
+
+    updateAircraftTarget(ac.id, {
+      flightPlan: newPlan,
+      targetFix: fixId,
+      inductionTarget: fixId,
+      mode: 'PROC'
+    });
+  };
+
+  const getLatLonById = (id: string) => {
+    const allPoints = [...FIXES, ...VOR_DME, ...AIRPORTS];
+    const f = allPoints.find(n => n.id === id || n.name === id);
+    return f ? { lat: f.lat, lon: f.lon } : null;
   };
 
   const COLORS = {
@@ -277,6 +480,7 @@ const RadarDisplay = () => {
               </div>
             )}
           </section>
+
          </div>
 
         <div className="p-2 border-t border-slate-700 text-[9px] text-slate-500 text-center">
@@ -286,14 +490,15 @@ const RadarDisplay = () => {
 
       {/* Main Display Area */}
       <div className="flex-1 relative flex flex-col h-full min-h-0 overflow-hidden">
-        {is3D ? (
-          <RadarDisplay3D 
-            layers={layers} 
-            activeProcedures={activeProcedures} 
-            verticalScale={verticalScale} 
-          />
-        ) : (
-          <svg viewBox="0 0 800 800" className="w-full h-full cursor-crosshair bg-slate-900">
+        <div className="flex-1 relative overflow-hidden">
+          {is3D ? (
+            <RadarDisplay3D 
+              layers={layers} 
+              activeProcedures={activeProcedures} 
+              verticalScale={verticalScale} 
+            />
+          ) : (
+            <svg viewBox="0 0 800 800" className="w-full h-full cursor-crosshair bg-slate-900">
             {/* MVA Circles (Background Layer) */}
             {MVA_RINGS.map(dist => (
               <circle
@@ -490,8 +695,187 @@ const RadarDisplay = () => {
                 </g>
               );
             })}
+
+            {/* Aircraft Layer (Topmost) */}
+            {aircrafts.map(ac => {
+              const pos = latLonToCanvas(ac.pos.lat, ac.pos.lon, zoom, center);
+              const tagX = pos.x + ac.tagOffset.x;
+              const tagY = pos.y + ac.tagOffset.y;
+              const altStr = Math.round(ac.pos.alt / 100).toString().padStart(3, '0');
+              const gsStr = Math.round(ac.vector.gs / 10).toString();
+              
+              return (
+                <g 
+                  key={ac.id} 
+                  className="cursor-pointer group" 
+                  onClick={() => setSelectedAircraftId(ac.id)}
+                >
+                  {/* Symbol: Arts style circle with dot */}
+                  {/* Symbol: Arts style circle with dot */}
+                  <circle cx={pos.x} cy={pos.y} r="2.5" fill="none" stroke={selectedAircraftId === ac.id ? "#22d3ee" : "#ffffff"} strokeWidth={selectedAircraftId === ac.id ? "1.5" : "1"} />
+                  <circle cx={pos.x} cy={pos.y} r="0.5" fill={selectedAircraftId === ac.id ? "#22d3ee" : "#ffffff"} />
+                  {/* Heading Vector (Short Debug line) */}
+                  <line
+                    x1={pos.x} y1={pos.y}
+                    x2={pos.x + Math.sin(ac.vector.hdg * Math.PI / 180) * 10}
+                    y2={pos.y - Math.cos(ac.vector.hdg * Math.PI / 180) * 10}
+                    stroke="#ffffff" strokeWidth="1" opacity="0.8"
+                  />
+                  <line x1={pos.x} y1={pos.y} x2={tagX} y2={tagY} stroke="#94a3b8" strokeWidth="0.5" opacity="0.6" />
+                  <g transform={`translate(${tagX}, ${tagY})`}>
+                    <rect x="-2" y="-12" width="45" height="24" fill={selectedAircraftId === ac.id ? "rgba(30, 58, 138, 0.8)" : "rgba(15, 23, 42, 0.7)"} rx="2" />
+                    <text y="-2" fill="#ffffff" fontSize="10" fontWeight="bold" className="select-none">{ac.callsign}</text>
+                    <text y="10" fill="#ffffff" fontSize="10" className="font-mono select-none">{altStr} {gsStr}</text>
+                  </g>
+                </g>
+              );
+            })}
           </svg>
-        )}
+          )}
+        </div>
+
+        {/* Bottom Panel (ATC Underbar) */}
+        <div className="bg-slate-800/95 border-t border-slate-700 z-20 flex flex-col shrink-0">
+          <div className="flex h-32 overflow-hidden">
+            {/* Target List (ATC Strips) */}
+            <div className="w-2/5 min-w-[450px] p-1 flex flex-col gap-1 overflow-y-auto border-r border-slate-700 bg-slate-900/60">
+              {aircrafts.map(ac => (
+                <div 
+                  key={ac.id} 
+                  onClick={() => setSelectedAircraftId(ac.id)}
+                  className={`p-1 px-3 border-l-4 cursor-pointer flex flex-col transition-all font-mono leading-tight ${
+                    selectedAircraftId === ac.id 
+                      ? 'bg-indigo-900/40 border-indigo-500 text-white shadow-[inset_0_0_10px_rgba(99,102,241,0.2)]' 
+                      : 'bg-slate-800/40 border-slate-600 text-slate-300 hover:bg-slate-800/60'
+                  }`}
+                >
+                  {/* Strip Line 1: CS | DBC | ALT | HDG/FIX | FP | COMM START */}
+                  <div className="flex items-center text-[10px] gap-4 border-b border-slate-700/50 pb-0.5">
+                    <span className="font-bold text-cyan-400 w-16">{ac.callsign}</span>
+                    <span className="w-16 text-slate-400">{ac.departureDestination}</span>
+                    <span className="w-10 text-amber-400 font-bold">A{ac.targetAlt/100}</span>
+                    <span className="w-20 text-emerald-400 font-bold">
+                      {ac.mode === 'VECTOR' ? `H${ac.targetHdg.toString().padStart(3, '0')}` : `- ${ac.targetFix || 'DCT'}`}
+                    </span>
+                    <span className="flex-1 truncate text-slate-500 text-[9px] uppercase tracking-tighter">{ac.flightPlan.join(' ')}</span>
+                    <span className="text-indigo-400 w-8 text-right">{ac.commStart}</span>
+                  </div>
+                  {/* Strip Line 2: TYPE | IFF | APCH | IDENT | COMM END */}
+                  <div className="flex items-center text-[9px] gap-4 pt-0.5 opacity-80">
+                    <span className="w-16 text-slate-200">{ac.aircraftType}</span>
+                    <span className="w-16">SQ {ac.squawk}</span>
+                    <span className={`w-16 font-bold ${ac.isApproachCleared ? 'text-pink-400' : 'text-slate-600'}`}>{ac.isApproachCleared ? 'APCH CLR' : '-------'}</span>
+                    <div className="flex-1"></div>
+                    <span className="italic text-slate-500">ID:{ac.identTime}</span>
+                    <span className="text-indigo-600 w-8 text-right font-bold">{ac.commEnd}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Target View & Command Panel */}
+            <div className="flex-1 p-2 overflow-hidden bg-slate-800">
+              {selectedAircraftId ? (
+                <div className="flex flex-col h-full px-4 justify-center">
+                  {aircrafts.filter(ac => ac.id === selectedAircraftId).map(ac => (
+                    <React.Fragment key={`cmd-bar-${ac.id}`}>
+                      {/* 1-Line Target Summary View */}
+                      <div className="flex items-center gap-6 text-[10px] font-mono border-b border-slate-700 pb-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-bold bg-indigo-600 px-2 py-0.5 rounded tracking-tighter">{ac.callsign}</span>
+                          <span className="text-indigo-300 font-bold uppercase">{ac.mode}</span>
+                        </div>
+                        <div className="flex gap-4 text-slate-300">
+                          <span>HDG: <span className="text-emerald-400">{Math.round(ac.vector.hdg).toString().padStart(3, '0')}</span></span>
+                          <span>ALT: <span className="text-sky-400">{Math.round(ac.pos.alt)}</span></span>
+                        </div>
+                        <div className="flex gap-4">
+                          <span className={ac.isStarAuthorized ? "text-amber-400 font-bold" : "text-slate-600"}>AUTH: {ac.isStarAuthorized ? 'YES' : 'NO'}</span>
+                          <span className={ac.isApproachCleared ? "text-pink-400 font-bold" : "text-slate-600"}>APCH: {ac.isApproachCleared ? 'YES' : 'NO'}</span>
+                        </div>
+                        {ac.targetFix && (
+                          <span className="text-indigo-400 ml-auto font-bold uppercase tracking-widest bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-800/50">Next: {ac.targetFix}</span>
+                        )}
+                        <button onClick={() => setSelectedAircraftId(null)} className="p-1 text-slate-500 hover:text-white transition-colors ml-2">
+                          <X size={16}/>
+                        </button>
+                      </div>
+
+                      {/* Control Inputs */}
+                      <div className="flex items-center gap-8">
+                        <div className="flex-1 max-w-xl grid grid-cols-2 gap-x-8 gap-y-1">
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-[8px] text-indigo-400 font-bold uppercase">
+                              <span>Set Target Alt</span>
+                              <span className="font-mono">{ac.targetAlt} FT</span>
+                            </div>
+                            <input 
+                              type="range" min="1000" max="40000" step="1000" value={ac.targetAlt} 
+                              onChange={(e) => updateAircraftTarget(ac.id, { targetAlt: parseInt(e.target.value) })}
+                              className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-[8px] text-emerald-400 font-bold uppercase">
+                              <span>Set Target Hdg</span>
+                              <span className="font-mono">{ac.targetHdg.toString().padStart(3, '0')}°</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="359" step="1" value={ac.targetHdg} 
+                              onChange={(e) => updateAircraftTarget(ac.id, { targetHdg: parseInt(e.target.value) })}
+                              className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1 shrink-0">
+                          {ac.mode === 'VECTOR' ? (
+                            <div className="flex gap-1">
+                              <select 
+                                className="bg-slate-700 text-[9px] text-white border border-slate-600 rounded px-1"
+                                value={ac.inductionTarget || ''}
+                                onChange={(e) => updateAircraftTarget(ac.id, { inductionTarget: e.target.value })}
+                              >
+                                {ac.flightPlan.map(f => <option key={f} value={f}>{f}</option>)}
+                              </select>
+                              <button 
+                                onClick={() => handleResumeOwnNavigation(ac)}
+                                className="py-1 px-3 bg-emerald-600/20 border border-emerald-500/40 rounded text-[9px] text-emerald-400 hover:bg-emerald-600/40 transition-colors uppercase font-bold"
+                              >
+                                Resume Nav
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1">
+                              <select 
+                                className="bg-slate-700 text-[9px] text-white border border-slate-600 rounded px-1"
+                                value={ac.targetFix || ''}
+                                onChange={(e) => handleReclearedDirect(ac, e.target.value)}
+                              >
+                                <option value="" disabled>Reclear Direct...</option>
+                                {ac.flightPlan.map(f => <option key={f} value={f}>{f}</option>)}
+                              </select>
+                              <button 
+                                onClick={() => handleReclearedDirect(ac, ac.flightPlan[ac.flightPlan.length - 1])}
+                                className="py-1 px-3 bg-indigo-600/20 border border-indigo-500/40 rounded text-[9px] text-indigo-400 hover:bg-indigo-600/40 transition-colors uppercase font-bold"
+                              >
+                                Direct Last
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-full flex items-center justify-center text-[11px] text-slate-500 tracking-widest font-bold">
+                  SELECT A TARGET ON RADAR OR LIST TO COMMAND
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Info Bar */}
         <footer className="bg-slate-800 p-1 px-4 border-t border-slate-700 text-[10px] text-slate-400 flex justify-between z-10">
