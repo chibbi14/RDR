@@ -18,6 +18,8 @@ interface AircraftState {
   vector: { hdg: number; gs: number };
   isStarAuthorized: boolean;
   isApproachCleared: boolean;
+  assignedStar: string | null;
+  assignedIap: string | null;
   flightPlan: string[];
   targetFix: string | null;
   inductionTarget: string | null;
@@ -32,6 +34,12 @@ interface AircraftState {
   commEnd: string;
   identTime: string;
 }
+
+// STARとIAPの接続定義
+const STAR_IAP_CONNECTIONS: Record<string, string[]> = {
+  'GAINA_EAST': ['ILS_Z_25', 'ILS_X_25'],
+  'GAINA_WEST': ['ILS_Z_25', 'ILS_X_25'],
+};
 
 // 航法計算用ユーティリティ
 const calculateBearing = (start: { lat: number; lon: number }, end: { lat: number; lon: number }) => {
@@ -86,6 +94,8 @@ const RadarDisplay = () => {
       vector: { hdg: 250, gs: 210 },
       isStarAuthorized: false,
       isApproachCleared: false,
+      assignedStar: null,
+      assignedIap: null,
       flightPlan: ['RAKDA', 'GAINA', 'YUMII', 'RJOH'],
       targetFix: 'RAKDA',
       inductionTarget: 'RAKDA',
@@ -108,6 +118,8 @@ const RadarDisplay = () => {
       vector: { hdg: 70, gs: 180 },
       isStarAuthorized: false,
       isApproachCleared: false,
+      assignedStar: null,
+      assignedIap: null,
       flightPlan: ['RAKDA', 'NAKAU', 'RJOC'],
       targetFix: 'RAKDA',
       inductionTarget: 'RAKDA',
@@ -133,19 +145,83 @@ const RadarDisplay = () => {
         let newTargetHdg = ac.targetHdg;
         let newTargetFix = ac.targetFix;
         let newMode = ac.mode;
+        let newTargetAlt = ac.targetAlt;
 
-        // 1. Navigation Mode Logic (DIRECT / PROC)
+        const activeProcId = ac.assignedIap || ac.assignedStar;
+        const currentProc = activeProcId ? PROCEDURES[activeProcId] : null;
+
+        // 1. Intercept Logic (VECTOR -> PROC via 30deg rule)
+        if (ac.mode === 'VECTOR' && ac.inductionTarget && ac.isApproachCleared) {
+          const iap = PROCEDURES[ac.inductionTarget];
+          if (iap && iap.type === 'IAP') {
+            // 滑走路に最も近い（最後の）セグメントを Final Course とみなす
+            const finalSegment = iap.routes[iap.routes.length - 1];
+            const startPos = getLatLonById(typeof finalSegment.from === 'string' ? finalSegment.from : (finalSegment.from as any).id);
+            const endPos = getLatLonById(typeof finalSegment.to === 'string' ? finalSegment.to : (finalSegment.to as any).id);
+            
+            if (startPos && endPos) {
+              const finalCourse = calculateBearing(startPos, endPos);
+              let angleDiff = Math.abs((ac.vector.hdg - finalCourse + 360) % 360);
+              if (angleDiff > 180) angleDiff = 360 - angleDiff;
+
+              // 30度以内の角度であれば会合（簡易的に距離判定も追加）
+              const distToCourseStart = calculateDistance(ac.pos, startPos);
+              if (angleDiff <= 30 && distToCourseStart < 3.0) {
+                newMode = 'PROC';
+                newTargetFix = typeof finalSegment.to === 'string' ? finalSegment.to : (finalSegment.to as any).id;
+                newTargetHdg = finalCourse;
+                // IAP開始
+                return { ...ac, mode: newMode, targetFix: newTargetFix, targetHdg: newTargetHdg, assignedIap: ac.inductionTarget };
+              }
+            }
+          }
+        }
+
+        // 2. Navigation Mode Logic (DIRECT / PROC)
         if ((ac.mode === 'DIRECT' || ac.mode === 'PROC') && ac.targetFix) {
           const fixPos = getLatLonById(ac.targetFix);
           if (fixPos) {
             // 目標地点への方位を計算
             newTargetHdg = calculateBearing(ac.pos, fixPos);
             
+            // CDA Logic: 手順飛行中の高度更新
+            if (currentProc && currentProc.nmAltitudes) {
+              const distToFix = calculateDistance(ac.pos, fixPos);
+              const currentIndex = ac.flightPlan.indexOf(ac.targetFix);
+              
+              // 次の高度制限を持つFIXを探す
+              const nextConstraints = Object.entries(currentProc.nmAltitudes)
+                .map(([nm, data]) => ({ nm: parseFloat(nm), alt: (data as any).alt }))
+                .sort((a, b) => a.nm - b.nm);
+              
+              // 現在のセグメントに基づく簡易CDA計算
+              // 本来的には手順開始点からの累積NMが必要だが、ここでは次のFIXの制限高度を目標にする
+              if (nextConstraints.length > 0) {
+                const nextTarget = nextConstraints.find(c => c.alt < ac.pos.alt) || nextConstraints[0];
+                newTargetAlt = nextTarget.alt;
+              }
+            }
+
             // 到達判定 (0.5NM 以内)
             const dist = calculateDistance(ac.pos, fixPos);
             if (dist < 0.5) {
               if (ac.mode === 'PROC') {
                 const currentIndex = ac.flightPlan.indexOf(ac.targetFix);
+                
+                // STAR から IAP への自動遷移チェック (GAINA -> ILS等)
+                const canConnect = ac.assignedStar && STAR_IAP_CONNECTIONS[ac.assignedStar]?.includes(ac.assignedIap || '');
+                if (currentIndex === ac.flightPlan.length - 1 && ac.isApproachCleared && canConnect && ac.assignedIap) {
+                    const iapProc = PROCEDURES[ac.assignedIap];
+                    const iapWaypoints = iapProc.routes.map(r => typeof r.to === 'string' ? r.to : (r.to as any).id);
+                    return {
+                      ...ac,
+                      flightPlan: iapWaypoints,
+                      targetFix: iapWaypoints[0],
+                      assignedStar: null, // STAR 終了
+                      mode: 'PROC'
+                    };
+                }
+
                 if (currentIndex !== -1 && currentIndex < ac.flightPlan.length - 1) {
                   // 次の Fix へ
                   newTargetFix = ac.flightPlan[currentIndex + 1];
@@ -173,9 +249,9 @@ const RadarDisplay = () => {
         }
         // 3. Altitude logic (2000ft/min = 33ft/s)
         const climbRate = 2000 / 60;
-        const nextAlt = Math.abs(ac.targetAlt - ac.pos.alt) > climbRate 
-          ? ac.pos.alt + Math.sign(ac.targetAlt - ac.pos.alt) * climbRate 
-          : ac.targetAlt;
+        const nextAlt = Math.abs(newTargetAlt - ac.pos.alt) > climbRate 
+          ? ac.pos.alt + Math.sign(newTargetAlt - ac.pos.alt) * climbRate 
+          : newTargetAlt;
         // 4. Forward Movement
         const dist = ac.vector.gs / 3600; // NM per sec
         const nextPos = calcRelativeLatLon(ac.pos.lat, ac.pos.lon, currentHdg, dist);
@@ -184,6 +260,7 @@ const RadarDisplay = () => {
           mode: newMode,
           targetFix: newTargetFix,
           targetHdg: newTargetHdg,
+          targetAlt: newTargetAlt,
           pos: { ...nextPos, alt: nextAlt }, 
           vector: { ...ac.vector, hdg: currentHdg } 
         };
@@ -208,9 +285,55 @@ const RadarDisplay = () => {
   };
 
   // Resume Own Navigation: VECTORモードを終了し、誘導目標へ向かう
+  // STAR 承認
+  const handleAuthorizeStar = (acId: string, starId: string) => {
+    const proc = PROCEDURES[starId];
+    if (!proc) return;
+    const waypoints = proc.routes.map(r => typeof r.to === 'string' ? r.to : (r.to as any).id);
+    
+    setAircrafts(prev => prev.map(ac => ac.id === acId ? {
+      ...ac,
+      assignedStar: starId,
+      isStarAuthorized: true,
+      flightPlan: waypoints,
+      targetFix: waypoints[0],
+      mode: 'PROC'
+    } : ac));
+  };
+
+  // 進入許可
+  const handleClearApproach = (acId: string, iapId: string, startFix?: string) => {
+    const proc = PROCEDURES[iapId];
+    if (!proc) return;
+    let waypoints = proc.routes.map(r => typeof r.to === 'string' ? r.to : (r.to as any).id);
+    
+    // 特定の FIX から開始する場合 (誘導からの会合)
+    if (startFix && waypoints.includes(startFix)) {
+      waypoints = waypoints.slice(waypoints.indexOf(startFix));
+    }
+
+    setAircrafts(prev => prev.map(ac => ac.id === acId ? {
+      ...ac,
+      assignedIap: iapId,
+      isApproachCleared: true,
+      flightPlan: waypoints,
+      targetFix: waypoints[0],
+      mode: 'PROC',
+      targetAlt: (proc.nmAltitudes && proc.nmAltitudes[0]) ? proc.nmAltitudes[0].alt : ac.targetAlt
+    } : ac));
+  };
+
+  // Resume Own Navigation: 誘導目標に従って航法復帰
   const handleResumeOwnNavigation = (ac: AircraftState) => {
     if (ac.mode !== 'VECTOR' || !ac.inductionTarget) return;
     
+    // 誘導目標が IAP (計器進入) の場合
+    if (PROCEDURES[ac.inductionTarget]?.type === 'IAP') {
+      if (!ac.isApproachCleared) return; // 進入許可がない場合は無視
+      handleClearApproach(ac.id, ac.inductionTarget);
+      return;
+    }
+
     const isInPlan = ac.flightPlan.includes(ac.inductionTarget);
     updateAircraftTarget(ac.id, {
       targetFix: ac.inductionTarget,
@@ -837,6 +960,14 @@ const RadarDisplay = () => {
                                 onChange={(e) => updateAircraftTarget(ac.id, { inductionTarget: e.target.value })}
                               >
                                 {ac.flightPlan.map(f => <option key={f} value={f}>{f}</option>)}
+                                <optgroup label="Fixes">
+                                  {ac.flightPlan.map(f => <option key={f} value={f}>{f}</option>)}
+                                </optgroup>
+                                <optgroup label="Final Course">
+                                  {Object.keys(PROCEDURES).filter(k => PROCEDURES[k].type === 'IAP').map(k => (
+                                    <option key={k} value={k}>FNL CRS: {k}</option>
+                                  ))}
+                                </optgroup>
                               </select>
                               <button 
                                 onClick={() => handleResumeOwnNavigation(ac)}
